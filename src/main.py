@@ -19,12 +19,14 @@ tf.set_random_seed(42)
 np.random.seed(42)
 # Why 42?: https://goo.gl/15uxva
 
-def input_placeholders(batchsize, maxqlen, maxalen, numans):
+def input_placeholders(batchsize, maxqlen, maxalen, numans,
+                       imageH, imageW, imageC):
     '''
     Placeholders for
         input questions, question mask
         input answers, answer masks
         correct answers
+        images
     '''
     ques_placeholder = tf.placeholder(tf.int32, shape=(batchsize, maxqlen))
     ques_mask_placeholder = tf.placeholder(
@@ -36,12 +38,17 @@ def input_placeholders(batchsize, maxqlen, maxalen, numans):
     ans_mask_placeholder = tf.placeholder(
         tf.int32, shape=(batchsize, numans, maxalen)
     )
+    image_placeholder = tf.placeholder(
+        tf.float32, shape=(batchsize, imageH, imageW, imageC)
+    )
+
     label_placeholder = tf.placeholder(
         tf.int32, shape=(batchsize, 1)
     )
 
     return ques_placeholder, ques_mask_placeholder,
            ans_placeholder, ans_mask_placeholder,
+           image_placeholder,
            label_placeholder
 
 
