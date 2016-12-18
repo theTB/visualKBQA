@@ -19,7 +19,7 @@ tf.set_random_seed(42)
 np.random.seed(42)
 # Why 42?: https://goo.gl/15uxva
 
-def input_placeholders(batchsize, maxqlen, maxalen, numans,
+def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
                        imageH, imageW, imageC):
     '''
     Placeholders for
@@ -27,6 +27,7 @@ def input_placeholders(batchsize, maxqlen, maxalen, numans,
         input answers, answer masks
         correct answers
         images
+        entity pairs and relation between them (3 ints: e1, e2, r)
     '''
     ques_placeholder = tf.placeholder(tf.int32, shape=(batchsize, maxqlen))
     ques_mask_placeholder = tf.placeholder(
@@ -40,6 +41,11 @@ def input_placeholders(batchsize, maxqlen, maxalen, numans,
     )
     image_placeholder = tf.placeholder(
         tf.float32, shape=(batchsize, imageH, imageW, imageC)
+    )
+    # for each example there are maxrlen commonsense facts
+    # each fact is defined by two entites and a relation between them
+    entity_relation_placeholder = tf.placeholder(
+        tf.int32, shape=(batchsize, maxrlen, 3)
     )
 
     label_placeholder = tf.placeholder(
