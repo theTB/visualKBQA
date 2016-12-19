@@ -212,7 +212,7 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
     print 'question length distribution (count, number of words):'
     sum_q_len = sum(q_lengths.values())
     for i in xrange(max_q_len + 1):
-      print '%2d: %10d   %f%%' % (i, q_lengths.get(i,0), q_lengths.get(i,0)*100.0/sum_len)
+      print '%2d: %10d   %f%%' % (i, q_lengths.get(i,0), q_lengths.get(i,0)*100.0/sum_q_len)
 
     # let's look at the distribution of answers lengths as well
     a_lengths = {}
@@ -226,7 +226,7 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
     print 'answer length distribution (count, number of words):'
     sum_a_len = sum(a_lengths.values())
     for i in xrange(max_a_len + 1):
-      print '%2d: %10d   %f%%' % (i, a_lengths.get(i,0), a_lengths.get(i,0)*100.0/sum_len)
+      print '%2d: %10d   %f%%' % (i, a_lengths.get(i,0), a_lengths.get(i,0)*100.0/sum_a_len)
 
   return vocab
 
@@ -245,15 +245,31 @@ def encode_question_answer(vqa_data, vocabulary):
 
       for j, mc in enumerate(qd['multiple_choices']):
         words = tokenize_sentence(mc)
-        vqa_data[split][i]['multiple_choices'][j] = [vocabulary.get(w, UNK_ID) for w in words]
+        vqa_data[split][i]['multiple_choices_tk_ids'][j] = [vocabulary.get(w, UNK_ID) for w in words]
 
   return vqa_data
 
-def preprocess_raw_data(vqa_data, word_count_threshold, verbose=False):
+def preprocess_raw_vqa_data(vqa_data, word_count_threshold, verbose=False):
   vocab = build_vocabulary(vqa_data, word_count_threshold, verbose)
   vqa_data = encode_question_answer(vqa_data, vocab)
 
   return vqa_data, vocab
 
-def vqa_data_iterator(vqa_data, batch_size):
-	pass
+def vqa_data_iterator(vqa_data, split, batch_size):
+	"""
+  Iterate on the raw vqa data.
+  Args:
+    vqa_data:     output of preprocess_raw_vqa_data
+    split:        'train'|'val'|'test'
+    batch_size:   int, the batch size
+  Returns:
+    a list of dictionary 
+  """
+  data_len = len(vqa_data[split])
+  batch_len = data_len // batch_size
+
+  for i in range(batch_len):
+    start_idx = i * batch_size
+    end_idx = start_idx + batch_size
+
+    yield vqa_data[split][start_idx:end_idx]
