@@ -309,7 +309,11 @@ def vqa_data_iterator(vqa_data, split, batch_size, neg_ratio=0.75):
   num_neg_per_batch = batch_size - num_pos_per_batch
 
   for i in range(batch_len):
-    start_idx = i * batch_size
-    end_idx = start_idx + batch_size
+    start_pos_idx = i * num_pos_per_batch
+    end_pos_idx = start_idx + num_pos_per_batch
+    
+
+    start_neg_idx = i * num_neg_per_batch
+    end_neg_idx = start_neg_idx + num_neg_per_batch
 
     yield vqa_data[split][start_idx:end_idx]

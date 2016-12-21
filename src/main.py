@@ -50,12 +50,15 @@ def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
 
     # for each example there are maxrlen commonsense facts
     # each fact is defined by two entites and a relation between them
-    entity_relation_placeholder = tf.placeholder(
-        tf.int32, shape=(batchsize, maxrlen, 3)
-    )
+    # entity_relation_placeholder = tf.placeholder(
+    #     tf.int32, shape=(batchsize, maxrlen, 3)
+    # )
+
+    im_vqa_logp = tf.placeholder(tf.float32, shape=[batchsize, numans])
+    kb_vqa_lopg = tf.placeholder(tf.float32, shape=[batchsize, numans])
 
     label_placeholder = tf.placeholder(
-        tf.int32, shape=(batchsize, 1)
+        tf.float32, shape=(batchsize, numans)
     )
 
     return ques_placeholder, ques_mask_placeholder,
@@ -133,8 +136,7 @@ def main(config):
     p = probability_networks.simple_mlp(emb_dim, 1, [image_embed, ques_embed, ans_embed])
 
     # combine image- and kb-vqa results
-    im_vqa_logp = tf.placeholder(tf.float32, shape=[batchsize])
-    kb_vqa_lopg = tf.placeholder(tf.float32, shape=[batchsize])
+    
     logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_lopg)
 
     # loss
