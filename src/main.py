@@ -143,10 +143,12 @@ def main(config):
     ans_embed = qa_text_networks.answer_lstm(
         ans_placeholder, ans_mask_placeholder, V, K, nhidden
     )
+    ans_shape = tf.shape(ans_embed)
 
     # probability network
     p = probability_networks.simple_mlp(
-        emb_dim, 1, [image_embed, ques_embed, ans_embed]
+        emb_dim, config.nlayers, 4,
+        [image_embed, ques_embed] + tf.unstack(ans_embed, axis=1)
     )
 
     # combine image- and kb-vqa results

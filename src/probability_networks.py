@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def simple_mlp(nhidden, nlayers, *vectors):
+def simple_mlp(nhidden, nlayers, noutputs=4, *vectors):
     inputs = tf.concat(1, list(vectors))
     shape = tf.shape(inputs)
     hidden = nhidden
@@ -27,13 +27,11 @@ def simple_mlp(nhidden, nlayers, *vectors):
             name="b"+str(layer)
         )
         affine = tf.matmul(layer_inputs, W) + b
-        if layer < nlayers - 1:
-            layer_inputs = tf.nn.relu(affine)
-        else:
-            output = tf.nn.sigmoid(affine)
+        # if layer < nlayers - 1:
+        layer_inputs = tf.nn.relu(affine)
         if layer < nlayers - 2:
             hidden = int(hidden / 2)
         else:
-            hidden = 1
+            hidden = noutputs
 
-    return output
+    return layer_inputs
