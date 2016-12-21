@@ -206,7 +206,7 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
   vocab = dict([(x, y) for (y, x) in enumerate(vocab_list)])
 
   # print some stats
-  if verbose:
+  if True:  # verbose:
     cw = sorted([(count,w) for w,count in counts.iteritems()], reverse=True)
     print('top words and their counts:')
     print('\n'.join(map(str,cw[:20])))
@@ -249,7 +249,7 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
     for i in xrange(max_a_len + 1):
       print('%2d: %10d   %f%%' % (i, a_lengths.get(i,0), a_lengths.get(i,0)*100.0/sum_a_len))
 
-  return vocab
+  return vocab, max_q_len, max_a_len
 
 def encode_question_answer(vqa_data, vocabulary):
   """Tokenize data and turn into token-ids using given vocabulary.
@@ -271,23 +271,42 @@ def encode_question_answer(vqa_data, vocabulary):
   return vqa_data
 
 def preprocess_raw_vqa_data(vqa_data, word_count_threshold, verbose=False):
-  vocab = build_vocabulary(vqa_data, word_count_threshold, verbose)
+  vocab, max_q_len, max_a_len = build_vocabulary(vqa_data, word_count_threshold, verbose)
   vqa_data = encode_question_answer(vqa_data, vocab)
 
-  return vqa_data, vocab
+  return vqa_data, vocab, max_q_len, max_a_len
 
-def vqa_data_iterator(vqa_data, split, batch_size):
+def vqa_data_iterator(vqa_data, split, batch_size, neg_ratio=0.75):
   """
   Iterate on the raw vqa data.
   Args:
     vqa_data:     output of preprocess_raw_vqa_data
     split:        'train'|'val'|'test'
     batch_size:   int, the batch size
+    neg_ratio     float, the ratio of negative samples in a batch
   Returns:
     a list of dictionary 
   """
   data_len = len(vqa_data[split])
   batch_len = data_len // batch_size
+
+  pos_vqa_data = []
+  neg_vqa_data = []
+  for d in vqa_data:
+    d['answer'] = d['multiple_choices'][0]
+    d['answer_tk_ids'] = d['multiple_choices_tk_ids'][0]
+    pos_vqa_data.append(d)
+
+    for i in xrange(3):
+      d['answer'] = d['multiple_choices'][i+1]
+      d['answer_tk_ids'] = d['multiple_choices_tk_ids'][i+1]
+      neg_vqa_data.append(d)      
+
+  np.random.shuffle(pos_vqa_data)
+  np.random.shuffle(neg_vqa_data)
+
+  num_pos_per_batch = int(batch_size * (1 - neg_ratio))
+  num_neg_per_batch = batch_size - num_pos_per_batch
 
   for i in range(batch_len):
     start_idx = i * batch_size

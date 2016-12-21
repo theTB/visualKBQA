@@ -102,10 +102,10 @@ def main(config):
           vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.85)   #[0.1, 0.95)
 
       with open(cache_file, 'w') as f:
-        cPickle.dump((vqa_data, vocab), f)
+        cPickle.dump((vqa_data, vocab, maxqlen, maxalen), f)
     else:
       with open(cache_file, 'r') as f:
-        vqa_data, vocab = cPickle.load(f)
+        vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
 
     # define the graph of the probability network
     # e_I       embedding of image
