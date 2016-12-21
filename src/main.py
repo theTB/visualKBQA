@@ -55,7 +55,7 @@ def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
     # )
 
     im_vqa_logp = tf.placeholder(tf.float32, shape=[batchsize, numans])
-    kb_vqa_lopg = tf.placeholder(tf.float32, shape=[batchsize, numans])
+    kb_vqa_logp = tf.placeholder(tf.float32, shape=[batchsize, numans])
 
     label_placeholder = tf.placeholder(
         tf.float32, shape=(batchsize, numans)
@@ -64,7 +64,7 @@ def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
     return ques_placeholder, ques_mask_placeholder,
            ans_placeholder, ans_mask_placeholder,
            image_embed_placeholder,
-           im_vqa_logp, kb_vqa_lopg
+           im_vqa_logp, kb_vqa_logp
            label_placeholder
 
 
@@ -118,7 +118,7 @@ def main(config):
     # FIX ME!!! ugly!!!
     (ques_placeholder, ques_mask_placeholder, ans_placeholder,
      ans_mask_placeholder, pre_image_embed_placeholder,
-     im_vqa_logp, kb_vqa_lopg,
+     im_vqa_logp, kb_vqa_logp,
      label_placeholder) = input_placeholders(
         config.batchsize, maxqlen, maxalen,
         maxrlen=1, maxelen=1, numans=4, image_embed_dim=4096
@@ -150,7 +150,7 @@ def main(config):
     )
 
     # combine image- and kb-vqa results
-    logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_lopg)
+    logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_logp)
 
     # loss
     cross_entropy = tf.reduce_mean(
@@ -209,7 +209,7 @@ def main(config):
                 ans_mask_placeholder: ans_mask,
                 pre_image_embed_placeholder: imbed,
                 im_vqa_logp: im_logp,
-                kb_vqa_lopg: kb_logp,
+                kb_vqa_logp: kb_logp,
                 label_placeholder: label
             }
 
