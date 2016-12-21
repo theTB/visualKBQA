@@ -64,6 +64,7 @@ def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
     return ques_placeholder, ques_mask_placeholder,
            ans_placeholder, ans_mask_placeholder,
            image_embed_placeholder,
+           im_vqa_logp, kb_vqa_lopg
            label_placeholder
 
 
@@ -115,46 +116,120 @@ def main(config):
     # e_Q       embedding of question
     # e_As      list of embeddings of each answer
     # FIX ME!!! ugly!!!
-    ques_placeholder, ques_mask_placeholder, ans_placeholder, ans_mask_placeholder, pre_image_embed_placeholder, label_placeholder = input_placeholders(
-      config.batchsize, maxqlen, maxalen, maxrlen=1, maxelen=1, numans=4, image_embed_dim=4096)
+    (ques_placeholder, ques_mask_placeholder, ans_placeholder,
+     ans_mask_placeholder, pre_image_embed_placeholder,
+     im_vqa_logp, kb_vqa_lopg,
+     label_placeholder) = input_placeholders(
+        config.batchsize, maxqlen, maxalen,
+        maxrlen=1, maxelen=1, numans=4, image_embed_dim=4096
+    )
 
     # image embedding
     image_embed_w = tf.Variable(tf.zeros([4096, emb_dim]))
     image_embed_b = tf.Variable(tf.zeros([emb_dim]))
-    image_embed = tf.nn.relu(tf.matmul(pre_image_embed_placeholder, image_embed_w) + image_embed_b)
+    image_embed = tf.nn.relu(
+        tf.matmul(pre_image_embed_placeholder, image_embed_w) + image_embed_b
+    )
 
     # question embedding
     V = len(vocab.keys())
     K = emb_dim
     nhidden = emb_dim
-    ques_embed = qa_text_networks.question_lstm(ques_placeholder, ques_mask_placeholder, V, K, nhidden)
+    ques_embed = qa_text_networks.question_lstm(
+        ques_placeholder, ques_mask_placeholder, V, K, nhidden
+    )
 
     # answers embedding
-    ans_embed = qa_text_networks.answer_lstm(ans_placeholder, ans_mask_placeholder, V, K, nhidden)
+    ans_embed = qa_text_networks.answer_lstm(
+        ans_placeholder, ans_mask_placeholder, V, K, nhidden
+    )
 
     # probability network
-    p = probability_networks.simple_mlp(emb_dim, 1, [image_embed, ques_embed, ans_embed])
+    p = probability_networks.simple_mlp(
+        emb_dim, 1, [image_embed, ques_embed, ans_embed]
+    )
 
     # combine image- and kb-vqa results
-    
     logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_lopg)
 
     # loss
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, label_placeholder))
+    cross_entropy = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(logits, label_placeholder)
+    )
 
-    train_step = get_optimizer(config, step)
+    # optimizer
+    global_step = tf.Variable(0, trainable=False, name='global_step')
+    incr_step = tf.assign(global_step, global_step + 1)
+    optimizer = get_optimizer(config, global_step)
 
-    while data in read_data.vqa_data_iterator(vqa_data, 'train', config.batchsize):
-      imbed = data['image_embed']
-      ques = data['question']
-      ans = data['answers']
-      im_vqa_logp = data['im_vqa_logp']
-      kb_vqa_lopg = data['kb_vqa_lopg']
-      # train_step.run(feed_dict={})
+    def get_train_op(loss, optimizer):
+        variables = tf.trainable_variables()
+        grads_and_vars = optimizer.compute_gradients(loss, variables)
+        # var_names = [v.name for v in variables]
+        grad_var_norms = [(tf.global_norm([gv[1]]), tf.global_norm([gv[0]]))
+                          for gv in grads_and_vars]
+        capped_grads, global_norm = tf.clip_by_global_norm(
+            [gv[0] for gv in grads_and_vars], config.grad_clip
+        )
+        capped_grads_and_vars = [(capped_grads[i], gv[1])
+                                 for i, gv in enumerate(grads_and_vars)]
+        # norms of gradients for debugging
+        grad_norms = [tf.sqrt(tf.reduce_sum(tf.square(grad))) for grad, _ in grads_and_vars]
+        train_op = optimizer.apply_gradients(capped_grads_and_vars)
+        return train_op
+
+    train_op, grad_norms = get_train_op(cross_entropy, optimizer)
+
+    session = tf.Session()
+
+    # Add ops to save and restore all the variables.
+    saver = tf.train.Saver()
+
+    init_op = tf.initialize_all_variables()
+    sess.run(init_op)
+
+    print("Starting Training")
+
+    for epoch in xrange(config.nepochs):
+        while data in read_data.vqa_data_iterator(
+            vqa_data, 'train', config.batchsize
+        ):
+            imbed = data['image_embed']
+            ques = data['question']
+            qmask = data['question_mask']
+            ans = data['answers']
+            ans_mask = data['answers_mask']
+            im_logp = data['im_vqa_logp']
+            kb_logp = data['kb_vqa_logp']
+            label = data['labels']
+            feed_dict = {
+                ques_placeholder: ques,
+                ques_mask_placeholder: qmask,
+                ans_placeholder: ans,
+                ans_mask_placeholder: ans_mask,
+                pre_image_embed_placeholder: imbed,
+                im_vqa_logp: im_logp,
+                kb_vqa_lopg: kb_logp,
+                label_placeholder: label
+            }
+
+            _, batch_loss, step = sess.run(
+                [train_op, cross_entropy, incr_step],
+                feed_dict=feed_dict
+            )
+
+            print("Step %d, Loss: %.3f" % (step, batch_loss))
+            if step % config.val_freq == 0:
+                # save model
+                saver.save(
+                    session,
+                    config.log_dir + "/model-epoch%d-step%d" % (epoch, step)
+                )
+                # Do some validation
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(description='Matrix tree parser')
+    p = argparse.ArgumentParser(description='Image QA using ConceptNet')
 
     p.add_argument('--data_file', required=True, type=str,
                    help='path to parsing dataset')

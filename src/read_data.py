@@ -20,6 +20,27 @@ GO_ID = 1
 EOS_ID = 2
 UNK_ID = 3
 
+
+def pad_mask(X, maxlen):
+    '''
+    Given a list of lists X, pad each list within X to maxlen
+    returns np.arrays of padded X and corresponding mask
+    '''
+    N = len(X)
+    X_out = None
+    X_out = np.zeros((N, maxlen), dtype=np.int64)
+    M = np.ones((N, maxlen), dtype=np.float64)
+    for i, x in enumerate(X):
+        n = len(x)
+        if n < maxlen:
+            X_out[i, :n] = x
+            M[i, n:] = 0
+        else:
+            X_out[i, :] = x[:maxlen]
+
+    return X_out, M
+
+
 # -------------------------------- dataset IO ------------------------------------------
 def read_visual7w_dataset(qa_file, ground_annot_file):
   '''
@@ -28,7 +49,7 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
 
   Input: qa_file and ground_annot_file are two files provided by the Visual7W dataset
   Return:
-    vqa_data is a dictionary with keys of ['train', 'val', 'test']. Each value entry is a list, 
+    vqa_data is a dictionary with keys of ['train', 'val', 'test']. Each value entry is a list,
     where each entry is a dictionary that contains:
       multiple_choices    a list consisting of 4 candidate answers
       question            a string
@@ -118,13 +139,13 @@ def append_image_vqa_results(vqa_data, image_vqa_results_file):
   '''
   Augment the visual question answering dataset with predicted answers from a pure image vqa model.
 
-  Input 
+  Input
     vqa_data                  data returned by the read_visual7w_dataset function
     image_vqa_results_file    file path containing the image vqa predictions
 
   Output
     Similar vqa_data, but each of the dictionary contains more data as follows
-      logp      a list of float values, where each entry is the average negative log likelihood 
+      logp      a list of float values, where each entry is the average negative log likelihood
                 of all words in each candidate answer.
   '''
   with open(image_vqa_results_file, 'r') as f:
@@ -150,7 +171,7 @@ def append_image_embeddings(vqa_data, image_embeddings_file):
   Augment the visual question answering dataset with image embeddings extracted from a pre-trained
   VGG16 CNN on ImageNet dataset.
 
-  Input 
+  Input
     vqa_data                  data returned by the read_visual7w_dataset function
     image_embeddings_file    file path containing the image embeddings
 
@@ -169,14 +190,14 @@ def append_image_embeddings(vqa_data, image_embeddings_file):
   return vqa_data
 
 # -------------------------------- data preprocessing ------------------------------------------
-def tokenize_sentence(sentence): 
+def tokenize_sentence(sentence):
   """
   Tokenize a sentence.
   Args:
     sentence: a sentence
   Returns:
     tokens: tokenized sentence, a list
-  """ 
+  """
   tokens = str(sentence).lower().translate(None, string.punctuation).strip().split()
   return tokens
 
@@ -285,7 +306,7 @@ def vqa_data_iterator(vqa_data, split, batch_size, neg_ratio=0.75):
     batch_size:   int, the batch size
     neg_ratio     float, the ratio of negative samples in a batch
   Returns:
-    a list of dictionary 
+    a list of dictionary
   """
   data_len = len(vqa_data[split])
   batch_len = data_len // batch_size
@@ -300,7 +321,7 @@ def vqa_data_iterator(vqa_data, split, batch_size, neg_ratio=0.75):
     for i in xrange(3):
       d['answer'] = d['multiple_choices'][i+1]
       d['answer_tk_ids'] = d['multiple_choices_tk_ids'][i+1]
-      neg_vqa_data.append(d)      
+      neg_vqa_data.append(d)
 
   np.random.shuffle(pos_vqa_data)
   np.random.shuffle(neg_vqa_data)
@@ -311,7 +332,7 @@ def vqa_data_iterator(vqa_data, split, batch_size, neg_ratio=0.75):
   for i in range(batch_len):
     start_pos_idx = i * num_pos_per_batch
     end_pos_idx = start_idx + num_pos_per_batch
-    
+
 
     start_neg_idx = i * num_neg_per_batch
     end_neg_idx = start_neg_idx + num_neg_per_batch
