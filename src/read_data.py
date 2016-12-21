@@ -33,6 +33,8 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
       multiple_choices    a list consisting of 4 candidate answers
       question            a string
       filename            corresponding image name in the dataset
+
+      *********************************** obsoleted ***************************************
       visual_concepts     a list where each entry is a dictionary containing
                             name      string, name of the visual concept
                             height    height of the bounding box around the concept in the image
@@ -41,6 +43,17 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
                             y         top
                             qa_id     the question id corresponding to the concept
                           Note that, there might be no provided visual concepts in an image.
+      ********************************* end obsoleted **************************************
+
+      visual_concept      a dictionary contains
+                            name      string, name of the visual concept
+                            height    height of the bounding box around the concept in the image
+                            width
+                            x         left
+                            y         top
+                            qa_id     the question id corresponding to the concept
+                          Note that, there might be no provided visual concepts in an image.
+
       split               string, train|val|test
       qa_id               index of the question
       answer              string, correct answer (the first one in multiple_choices)
@@ -66,30 +79,38 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
   with open(ground_annot_file, 'r') as f:
     ground_data = json.load(f)['boxes']
 
-  # build a map from qa_id to image id, to group visual concepts in an image
-  qa_id_image_id = {}
-  for split in ['train', 'val', 'test']:
-    for qa in qa_data[split]:
-      qa_id_image_id[qa['qa_id']] = qa['image_id']
+  # # build a map from qa_id to image id, to group visual concepts in an image
+  # qa_id_image_id = {}
+  # for split in ['train', 'val', 'test']:
+  #   for qa in qa_data[split]:
+  #     qa_id_image_id[qa['qa_id']] = qa['image_id']
 
-  image_concepts = {}
-  for gd in ground_data:
-    image_id = qa_id_image_id[gd['qa_id']]
-    if image_id in image_concepts:
-      image_concepts[image_id].append(gd)
-    else:
-      image_concepts[image_id] = [gd];
+  # image_concepts = {}
+  # for gd in ground_data:
+  #   image_id = qa_id_image_id[gd['qa_id']]
+  #   if image_id in image_concepts:
+  #     image_concepts[image_id].append(gd)
+  #   else:
+  #     image_concepts[image_id] = [gd];
 
-  for split in ['train', 'val', 'test']:
-    for idx, qa in enumerate(qa_data[split]):
-      image_id = qa['image_id']
-      if image_id in image_concepts:
-        visual_concepts = image_concepts[image_id]
-      else:
-        visual_concetps = []
-      # qa.update({'visual_concepts': image_concepts[image_id]})
-      qa['visual_concepts'] = visual_concepts
-      qa_data[split][idx] = qa
+  '''
+  We currently don't need this part. Concept in the question would be automatically extracted.
+  '''
+  # image_concepts = {}
+  # for gd in ground_data:
+  #   qa_id = gd['qa_id']
+  #   image_concepts[qa_id] = gd
+
+  # for split in ['train', 'val', 'test']:
+  #   for idx, qa in enumerate(qa_data[split]):
+  #     # image_id = qa['image_id']
+  #     qa_id = qa['qa_id']
+  #     if qa_id in image_concepts:
+  #       visual_concepts = image_concepts[qa_id]
+  #     else:
+  #       visual_concetps = []
+  #     qa['visual_concept'] = visual_concepts
+  #     qa_data[split][idx] = qa
 
   return qa_data
 
@@ -187,19 +208,19 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
   # print some stats
   if verbose:
     cw = sorted([(count,w) for w,count in counts.iteritems()], reverse=True)
-    print 'top words and their counts:'
-    print '\n'.join(map(str,cw[:20]))
-    print 'most infrequent words and their counts:'
-    print '\n'.join(map(str,cw[-20:]))
+    print('top words and their counts:')
+    print('\n'.join(map(str,cw[:20])))
+    print('most infrequent words and their counts:')
+    print('\n'.join(map(str,cw[-20:])))
 
     total_words = sum(counts.itervalues())
-    print 'total words:', total_words
+    print('total words:', total_words)
     bad_words = [w for w,n in counts.iteritems() if n <= count_thr]
     word_freq = [n for w, n in counts.iteritems() if n > count_thr]
     bad_count = sum(counts[w] for w in bad_words)
-    print 'number of bad words: %d/%d = %.2f%%' % (len(bad_words), len(counts), len(bad_words)*100.0/len(counts))
-    print 'number of words in vocab would be %d' % (len(vocab), )
-    print 'number of UNKs: %d/%d = %.2f%%' % (bad_count, total_words, bad_count*100.0/total_words)
+    print('number of bad words: %d/%d = %.2f%%' % (len(bad_words), len(counts), len(bad_words)*100.0/len(counts)))
+    print('number of words in vocab would be %d' % (len(vocab), ))
+    print('number of UNKs: %d/%d = %.2f%%' % (bad_count, total_words, bad_count*100.0/total_words))
 
     # lets look at the distribution of question lengths
     q_lengths = {}
@@ -208,11 +229,11 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
         nw = len(tokenize_sentence(qd['question']))
         q_lengths[nw] = q_lengths.get(nw, 0) + 1
     max_q_len = max(q_lengths.keys())
-    print 'max length question in the train+val data: ', max_q_len
-    print 'question length distribution (count, number of words):'
+    print('max length question in the train+val data: ', max_q_len)
+    print('question length distribution (count, number of words):')
     sum_q_len = sum(q_lengths.values())
     for i in xrange(max_q_len + 1):
-      print '%2d: %10d   %f%%' % (i, q_lengths.get(i,0), q_lengths.get(i,0)*100.0/sum_q_len)
+      print('%2d: %10d   %f%%' % (i, q_lengths.get(i,0), q_lengths.get(i,0)*100.0/sum_q_len))
 
     # let's look at the distribution of answers lengths as well
     a_lengths = {}
@@ -222,11 +243,11 @@ def build_vocabulary(vqa_data, word_count_threshold, verbose=False):
           nw = len(tokenize_sentence(mc))
           a_lengths[nw] = a_lengths.get(nw, 0) + 1
     max_a_len = max(a_lengths.keys())
-    print 'max length answer in the train+val data: ', max_a_len
-    print 'answer length distribution (count, number of words):'
+    print('max length answer in the train+val data: ', max_a_len)
+    print('answer length distribution (count, number of words):')
     sum_a_len = sum(a_lengths.values())
     for i in xrange(max_a_len + 1):
-      print '%2d: %10d   %f%%' % (i, a_lengths.get(i,0), a_lengths.get(i,0)*100.0/sum_a_len)
+      print('%2d: %10d   %f%%' % (i, a_lengths.get(i,0), a_lengths.get(i,0)*100.0/sum_a_len))
 
   return vocab
 
@@ -256,7 +277,7 @@ def preprocess_raw_vqa_data(vqa_data, word_count_threshold, verbose=False):
   return vqa_data, vocab
 
 def vqa_data_iterator(vqa_data, split, batch_size):
-	"""
+  """
   Iterate on the raw vqa data.
   Args:
     vqa_data:     output of preprocess_raw_vqa_data
