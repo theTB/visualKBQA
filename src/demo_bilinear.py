@@ -5,7 +5,7 @@
 #arg3 is the way to get the score, valid input including
 #all, max, topfive, sum
 #[SymbolOf, CreatedBy, MadeOf, PartOf, HasLastSubevent, HasFirstSubevent, Desires, CausesDesire,
-#DefinedAs, HasA, ReceivesAction, MotivatedByGoal, Causes, HasProperty, HasPrerequisite, 
+#DefinedAs, HasA, ReceivesAction, MotivatedByGoal, Causes, HasProperty, HasPrerequisite,
 #HasSubevent, AtLocation, IsA, CapableOf, UsedFor]
 #case insensitive for the third argument
 import pickle
@@ -34,30 +34,31 @@ def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 def score(term1,term2,words,We,rel,Rel,Weight,Offset,evaType):
+    # print(rel)
     v1 = getVec(We,words,term1)
     v2 = getVec(We,words,term2)
     result = {}
 
-    del_rels = ['HasPainIntensity','HasPainCharacter','LocationOfAction','LocatedNear',
-    'DesireOf','NotMadeOf','InheritsFrom','InstanceOf','RelatedTo','NotDesires',
-    'NotHasA','NotIsA','NotHasProperty','NotCapableOf']
-
-    for del_rel in del_rels:
-        del rel[del_rel.lower()]
+    # del_rels = ['HasPainIntensity','HasPainCharacter','LocationOfAction','LocatedNear',
+    # 'DesireOf','NotMadeOf','InheritsFrom','InstanceOf','RelatedTo','NotDesires',
+    # 'NotHasA','NotIsA','NotHasProperty','NotCapableOf']
+    #
+    # for del_rel in del_rels:
+    #     del rel[del_rel.lower()]
 
     for k,v in rel.items():
         v_r = Rel[rel[k],:]
         gv1 = np.tanh(np.dot(v1,Weight)+Offset)
         gv2= np.tanh(np.dot(v2,Weight)+Offset)
-    
+
         temp1 = np.dot(gv1, v_r)
         score = np.inner(temp1,gv2)
         result[k] = (sigmoid(score))
 
     if(evaType.lower()=='max'):
         result = sorted(result.items(), key=lambda x: x[1], reverse = True)
-        for k,v in result[:1]:
-            print k, 'score:', v
+        # for k,v in result[:1]:
+        #     print k, 'score:', v
         return result[:1]
     if(evaType.lower()=='topfive'):
         result = sorted(result.items(), key=lambda x: x[1], reverse = True)
@@ -99,6 +100,5 @@ if __name__ == "__main__":
     words = model['words_name']
     rel = model['rel_name']
     print(rel)
-    
+
     result = score(str(sys.argv[1]),str(sys.argv[2]),words,We,rel,Rel,Weight,Offset,str(sys.argv[3]))
-    
