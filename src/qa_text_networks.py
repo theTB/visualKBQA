@@ -11,11 +11,12 @@ def question_lstm(text, mask, V, K, nhidden, nlayers=1,
                   peepholes=False, initialize=None, dropouts=None):
     lstm_embeddings = text_representations.bidir_lstm_model(
         text, mask, V, K, nhidden, nlayers,
-        peepholes, initialize, dropouts
+        peepholes, initialize, dropouts,
+        namescope="queslstm"
     )
     # output is (B x M x K)
     sum_states = tf.reduce_sum(lstm_embeddings, 1)
-    lens = tf.reduce_sum(mask, 1, keep_dims=True)
+    lens = tf.cast(tf.reduce_sum(mask, 1, keep_dims=True), tf.float32)
     # average of the hidden state outputs
     question_vectors = sum_states / lens
 
@@ -27,17 +28,17 @@ def answer_lstm(text, mask, V, K, nhidden, nlayers=1,
     '''
     text and mask here have dims (batchsize X numans X maxalen)
     '''
-    shape = tf.shape(text)
+    shape = text.get_shape().as_list()
     # reshape to (batchsize*numans X maxalen)
     batch_text = tf.reshape(text, (shape[0]*shape[1], shape[2]))
     batch_mask = tf.reshape(text, (shape[0]*shape[1], shape[2]))
     batch_lstm_embeddings = text_representations.bidir_lstm_model(
         batch_text, batch_mask, V, K, nhidden, nlayers,
-        peepholes, initialize, dropouts
+        peepholes, initialize, dropouts, namescope="anslstm"
     )
     # output is (B*Na x M x hidden)
-    sum_states = tf.reduce_sum(lstm_embeddings, 1)
-    lens = tf.reduce_sum(batch_mask, 1, keep_dims=True)
+    sum_states = tf.reduce_sum(batch_lstm_embeddings, 1)
+    lens = tf.cast(tf.reduce_sum(batch_mask, 1, keep_dims=True), tf.float32)
     # average of the hidden state outputs
     batch_answer_vectors = sum_states / lens
     # output is (B*Na x K)

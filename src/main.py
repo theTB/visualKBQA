@@ -95,6 +95,7 @@ def main(config):
     # get data
     cache_file = os.path.join(config.cache_dir, 'vqa_data.pkl')
     if not os.path.exists(cache_file):
+      print("Loading and Processing Data from raw...")
       vqa_data = read_data.read_visual7w_dataset(config.data_file, '')
       vqa_data = read_data.append_image_vqa_results(vqa_data, config.im_vqa_file)
       vqa_data = read_data.append_image_embeddings(vqa_data, config.im_embed_file)
@@ -108,9 +109,11 @@ def main(config):
       with open(cache_file, 'w') as f:
         cPickle.dump((vqa_data, vocab, maxqlen, maxalen), f)
     else:
+      print("Loading Data from cache...")
       with open(cache_file, 'r') as f:
         vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
 
+    print("Data loaded")
     # define the graph
     (ques_placeholder, ques_mask_placeholder, ans_placeholder,
      ans_mask_placeholder, pre_image_embed_placeholder,
@@ -142,10 +145,14 @@ def main(config):
     ans_shape = tf.shape(ans_embed)
 
     # probability network
+    print(image_embed.get_shape())
+    print(ques_embed.get_shape())
+    print(ans_embed.get_shape())
     p = probability_networks.simple_mlp(
         config.emb_dim, config.nlayers, 4,
-        [image_embed, ques_embed] + tf.unstack(ans_embed, axis=1)
+        image_embed, ques_embed, *tf.unpack(ans_embed, axis=1)
     )
+    print(p.get_shape())
 
     # combine image- and kb-vqa results
     logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_logp)
@@ -175,7 +182,9 @@ def main(config):
         grad_norms = [tf.sqrt(tf.reduce_sum(tf.square(grad)))
                       for grad, _ in grads_and_vars]
         train_op = optimizer.apply_gradients(capped_grads_and_vars)
-        return train_op
+        return train_op, grad_norms
+
+    train_op, grad_norms = get_train_op(cross_entropy, optimizer)
 
     # assume the first one is always the correct one
     def eval_accuracy(logits):
@@ -183,19 +192,17 @@ def main(config):
         acc = np.mean(pred == 0)
         return acc
 
-    train_op, grad_norms = get_train_op(cross_entropy, optimizer)
-
     session = tf.Session()
 
     # Add ops to save and restore all the variables.
     saver = tf.train.Saver()
 
     init_op = tf.initialize_all_variables()
-    sess.run(init_op)
+    session.run(init_op)
 
     print("Starting Training")
 
-    for epoch in xrange(config.nepochs):
+    for epoch in xrange(config.epochs):
         for data in enumerate(read_data.vqa_data_iterator(
             vqa_data, 'train', config.batchsize, maxqlen, maxalen, do_permutation=True)
         ):
@@ -218,7 +225,7 @@ def main(config):
                 label_placeholder: label
             }
 
-            _, batch_loss, step = sess.run(
+            _, batch_loss, step = session.run(
                 [train_op, cross_entropy, incr_step],
                 feed_dict=feed_dict
             )

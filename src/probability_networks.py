@@ -8,10 +8,12 @@ import tensorflow as tf
 
 def simple_mlp(nhidden, nlayers, noutputs=4, *vectors):
     inputs = tf.concat(1, list(vectors))
-    shape = tf.shape(inputs)
+    shape = inputs.get_shape().as_list()
+    print("Prob Net input: ", shape)
     hidden = nhidden
     if nlayers == 1:
-        assert(hidden == 1)
+        print("Probability has only one layer")
+        hidden = noutputs
     layer_inputs = inputs
     for layer in xrange(nlayers):
         W = tf.Variable(

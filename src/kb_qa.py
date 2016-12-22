@@ -79,12 +79,6 @@ def kb_scores(vqa_data, score_fn, outname):
     return all_scores
 
 
-
-
-
-
-
-
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description='ConceptNet scores for QA')
 
@@ -106,3 +100,8 @@ if __name__ == "__main__":
     Offset = model['bias']
     words = model['words_name']
     rel = model['rel_name']
+
+    with open(config.vqa, 'r') as f:
+        vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
+
+    

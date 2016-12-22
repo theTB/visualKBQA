@@ -34,7 +34,8 @@ def embedding_lookup(text, mask, V, K, initialize=None):
 
 def bidir_lstm_model(
         text, mask, V, K, nhidden, nlayers=1,
-        peepholes=False, initialize=None, dropouts=None
+        peepholes=False, initialize=None, dropouts=None,
+        namescope='bidir_lstm'
     ):
     '''
         Args:
@@ -50,30 +51,30 @@ def bidir_lstm_model(
         Returns:
             LSTM embeddings (batchsize X maxlen x hiddens)
     '''
-    embeddings = embedding_lookup(text, mask, V, K, initialize)
+    with tf.variable_scope(namescope):
+        embeddings = embedding_lookup(text, mask, V, K, initialize)
 
-    if dropouts:
-        inputs = tf.nn.dropout(embeddings, dropouts[0])
-    else:
-        inputs = embeddings
-
-    for layer in xrange(nlayers):
-        fwd_cell = tf.nn.rnn_cell.LSTMCell(
-            nhidden, use_peepholes=peepholes, state_is_tuple=True
-        )
-        bwd_cell = tf.nn.rnn_cell.LSTMCell(
-            nhidden, use_peepholes=peepholes, state_is_tuple=True
-        )
-        lstm_outputs, _ = tf.nn.bidirectional_dynamic_rnn(
-            cell_fw=fwd_cell, cell_bw=bwd_cell, inputs=embeddings,
-            sequence_length=tf.cast(tf.reduce_sum(mask, 1), tf.int32),
-            dtype=tf.float32
-        )
-        fwd_outputs, bwd_outputs = lstm_outputs
-        inputs = tf.concat(2, [fwd_outputs, bwd_outputs])
         if dropouts:
-            inputs = tf.nn.dropout(inputs, dropouts[layer+1])
-        if layer < nlayers-1: nhidden = int(nhidden / 2)
+            inputs = tf.nn.dropout(embeddings, dropouts[0])
+        else:
+            inputs = embeddings
 
+        for layer in xrange(nlayers):
+            fwd_cell = tf.nn.rnn_cell.LSTMCell(
+                nhidden, use_peepholes=peepholes, state_is_tuple=True
+            )
+            bwd_cell = tf.nn.rnn_cell.LSTMCell(
+                nhidden, use_peepholes=peepholes, state_is_tuple=True
+            )
+            lstm_outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+                cell_fw=fwd_cell, cell_bw=bwd_cell, inputs=embeddings,
+                sequence_length=tf.cast(tf.reduce_sum(mask, 1), tf.int32),
+                dtype=tf.float32
+            )
+            fwd_outputs, bwd_outputs = lstm_outputs
+            inputs = tf.concat(2, [fwd_outputs, bwd_outputs])
+            if dropouts:
+                inputs = tf.nn.dropout(inputs, dropouts[layer+1])
+            if layer < nlayers-1: nhidden = int(nhidden / 2)
 
     return inputs
