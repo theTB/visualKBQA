@@ -97,8 +97,8 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
       qp['multiple_choices'] = [qp['answer']] + qp['multiple_choices']
       qa_data[split].append(qp)
 
-  with open(ground_annot_file, 'r') as f:
-    ground_data = json.load(f)['boxes']
+  # with open(ground_annot_file, 'r') as f:
+  #   ground_data = json.load(f)['boxes']
 
   # # build a map from qa_id to image id, to group visual concepts in an image
   # qa_id_image_id = {}
@@ -284,6 +284,7 @@ def encode_question_answer(vqa_data, vocabulary):
     for i, qd in enumerate(vqa_data[split]):
       words = tokenize_sentence(qd['question'])
       vqa_data[split][i]['question_tk_ids'] = [vocabulary.get(w, UNK_ID) for w in words]
+      vqa_data[split][i]['multiple_choices_tk_ids'] = [[] for _ in qd['multiple_choices']]
 
       for j, mc in enumerate(qd['multiple_choices']):
         words = tokenize_sentence(mc)
@@ -297,13 +298,15 @@ def preprocess_raw_vqa_data(vqa_data, word_count_threshold, verbose=False):
 
   return vqa_data, vocab, max_q_len, max_a_len
 
-def vqa_data_iterator(vqa_data, split, batch_size, do_permutation=False):
+def vqa_data_iterator(vqa_data, split, batch_size, max_q_len, max_a_len, do_permutation=False):
   """
   Iterate on the raw vqa data.
   Args:
     vqa_data:         output of preprocess_raw_vqa_data
     split:            'train'|'val'|'test'
     batch_size:       int, the batch size
+    max_q_len         maximum length of a question
+    max_a_len         maximum length of an answer
     do_permutation    if to randomly shuffle the four candidate answers
   Returns:
     A dictionary has following fields:
@@ -333,13 +336,13 @@ def vqa_data_iterator(vqa_data, split, batch_size, do_permutation=False):
     kb_logp = np.zeros((batch_size, num_ans), dtype=np.float32)
     label = np.zeros((batch_size, num_ans), dtype=np.float32)
 
-    max_q_len = -1
-    max_a_len = -1
+    # max_q_len = -1
+    # max_a_len = -1
 
-    for idx, data in enumerate(vqa_data[start_idx:end_idx]):
-      max_q_len = max(max_q_len, len(data['question_tk_ids']))
-      for ans in data['multiple_choices_tk_ids']:
-        max_a_len = max(max_a_len, len(ans))
+    # for idx, data in enumerate(vqa_data[start_idx:end_idx]):
+    #   max_q_len = max(max_q_len, len(data['question_tk_ids']))
+    #   for ans in data['multiple_choices_tk_ids']:
+    #     max_a_len = max(max_a_len, len(ans))
 
     ques = np.zeros((batch_size, max_q_len), dtype=np.float32)
     ques_mask = np.zeros((batch_size, max_q_len), dtype=np.float32)

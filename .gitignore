@@ -2,4 +2,8 @@
 .DS_STORE
 *.pyc
 
+run.sh
+
 /tmp
+/cache
+/logs

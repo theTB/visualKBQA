@@ -33,7 +33,7 @@ def embedding_lookup(text, mask, V, K, initialize=None):
 
 
 def bidir_lstm_model(
-        text, mask, V, K, nhidden, nlayers=1
+        text, mask, V, K, nhidden, nlayers=1,
         peepholes=False, initialize=None, dropouts=None
     ):
     '''
