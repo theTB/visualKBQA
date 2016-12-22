@@ -150,13 +150,14 @@ def main(config):
     print(ques_embed.get_shape())
     print(ans_embed.get_shape())
     p = probability_networks.simple_mlp(
-        config.nhidden, config.nlayers, 4,
+        config.nhidden, config.nlayers, 1,
         image_embed, ques_embed, *tf.unpack(ans_embed, axis=1)
     )
     print(p.get_shape())
 
     # combine image- and kb-vqa results
-    logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_logp)
+    # logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_logp)
+    logits = p * tf.exp(-im_vqa_logp) + (1 - p) * tf.exp(-kb_vqa_logp)
 
     # loss
     cross_entropy = tf.reduce_mean(
@@ -231,8 +232,14 @@ def main(config):
                 [train_op, cross_entropy, incr_step, p],
                 feed_dict=feed_dict
             )
-            print("probs:")
-            print(p)
+            # print("probs:")
+            # print(prs)
+            # print("imqa:")
+            # print(im_logp)
+            # print("kbqa:")
+            # print(kb_logp)
+            # print("labels:")
+            # print(label)
 
             print("Step %d, Loss: %.3f" % (step, batch_loss))
             if step % config.val_freq == 0:

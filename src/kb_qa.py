@@ -5,6 +5,7 @@ from __future__ import print_function
 import numpy as np
 import read_data
 import os
+import re
 
 import argparse
 import pickle
@@ -20,7 +21,7 @@ grammar = '''
           '''
 chunk_parser = nltk.RegexpParser(grammar)
 stopwords = nltk.corpus.stopwords.words('english')
-stopwords += ['.', '.', '?', "'", ":", ";", "!", "many", "'s"]
+stopwords += ['.', '.', ',', '/', '?', "'", ":", ";", "!", "many", "'s"]
 
 def chunker(text):
     tokens = nltk.word_tokenize(text.strip())
@@ -35,10 +36,10 @@ def chunker(text):
             chunk = node.leaves()
             if len(chunk) > 1 and chunk[0][0] in stopwords:
                 chunk = chunk[1:]
-            word = "_".join(map(lambda x: x[0], chunk))
+            word = "_".join(map(lambda x: re.sub('-', '_', x[0]), chunk))
             # print(word)
         else:
-            word = node[0]
+            word = re.sub('-', '_', node[0])
         chunked_tokens.append(word)
 
     return chunked_tokens
@@ -147,8 +148,8 @@ if __name__ == "__main__":
         del rel[del_rel.lower()]
 
     with open(config.vqa, 'r') as f:
-        # vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
-        vqa_data = cPickle.load(f)
+        vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
+        # vqa_data = cPickle.load(f)
     if config.save_small:
         if not os.path.exists(config.vqa+".small.pkl"):
             small = {}
