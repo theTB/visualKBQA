@@ -208,7 +208,7 @@ def main(config):
 
     for epoch in xrange(config.epochs):
         for data in read_data.vqa_data_iterator(
-            vqa_data, 'train', config.batchsize, maxqlen, maxalen, do_permutation=True
+            vqa_data, 'train', config.batchsize, maxqlen, maxalen, do_permutation=False
         ):
             imbed = data['image_embed']
             ques = data['question']
