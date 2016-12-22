@@ -59,7 +59,7 @@ def score_fn(Rel, We, Weight, Offset, words, rel, evalType='max'):
     return scorer
 
 
-def kb_scores(vqa_data, score_fn, outname):
+def kb_scores(vqa_data, score_fn, outname, verbose=True):
     all_scores = {}
     for split in ['train', 'val', 'test']:
         all_scores[split] = []
@@ -70,11 +70,13 @@ def kb_scores(vqa_data, score_fn, outname):
             q_ents = extract_entities(question)
             ans_ents = map(lambda x: extract_entities(x), answers)
             scores = []
-            print(question)
-            print(q_ents)
+            if verbose:
+                print(question)
+                print(q_ents)
             for i, a_ents in enumerate(ans_ents):
                 # a_ents are the entities in each answer
-                print("\t", answers[i])
+                if verbose:
+                    print("\t", answers[i])
                 mscore = 0.
                 for ent in a_ents:
                     # score answer entities with question entities and take max
@@ -86,16 +88,18 @@ def kb_scores(vqa_data, score_fn, outname):
                         s  = max(sc)
                     else:
                         s = 0.
-                    j = 0
-                    for e in q_ents:
-                        if e != ent:
-                            print("\t\tscore %s %s " %(e, ent), sc[j])
-                            j += 1
+                    if verbose:
+                        j = 0
+                        for e in q_ents:
+                            if e != ent:
+                                print("\t\tscore %s %s " %(e, ent), sc[j])
+                                j += 1
                     mscore = max(mscore, s)
                     # print(s)
                     # print(mscore)
                 scores.append(-np.log(mscore))
-                print(question, " ", answers[i], " score: ", mscore)
+                if verbose:
+                    print(question, " ", answers[i], " score: ", mscore)
 
             ans = {'qa_id': qid,
                    'multiple_choices': answers,
@@ -119,6 +123,7 @@ if __name__ == "__main__":
     p.add_argument('--output', required=True, type=str,
                    help='path to output file')
     p.add_argument('--save-small', action='store_true')
+    p.add_argument('--verbose', action='store_true')
 
     config = p.parse_args()
 
@@ -155,4 +160,4 @@ if __name__ == "__main__":
     score_func = score_fn(Rel, We, Weight, Offset, words, rel, 'max')
 
     print("Getting scores")
-    all_scores = kb_scores(vqa_data, score_func, config.output)
+    all_scores = kb_scores(vqa_data, score_func, config.output, config.verbose)

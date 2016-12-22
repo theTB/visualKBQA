@@ -9,7 +9,9 @@ CACHE_DIR=cache
 
 WORD_CNT_THRESH=5
 BATCH_SIZE=256
-EMBED_DIM=512
+EMBED_DIM=300
+NHIDDEN=100
+NLAYERS=2
 VERBOSE=1
 
 python ./src/main.py \
@@ -21,4 +23,6 @@ python ./src/main.py \
        --log_dir=$LOG_DIR \
        --cache_dir=$CACHE_DIR \
        --word_cnt_thresh=$WORD_CNT_THRESH \
-       --verbose=$VERBOSE
+       --verbose=$VERBOSE \
+       --nhidden=$NHIDDEN \
+       --nlayers=$NLAYERS

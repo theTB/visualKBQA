@@ -125,8 +125,8 @@ def main(config):
     )
 
     # image embedding
-    image_embed_w = tf.Variable(tf.zeros([4096, config.emb_dim]))
-    image_embed_b = tf.Variable(tf.zeros([config.emb_dim]))
+    image_embed_w = tf.Variable(tf.zeros([4096, config.nhidden]))
+    image_embed_b = tf.Variable(tf.zeros([config.nhidden]))
     image_embed = tf.nn.relu(
         tf.matmul(pre_image_embed_placeholder, image_embed_w) + image_embed_b
     )
@@ -134,7 +134,7 @@ def main(config):
     # question embedding
     V = len(vocab.keys())
     K = config.emb_dim
-    nhidden = config.emb_dim
+    nhidden = config.nhidden
     ques_embed = qa_text_networks.question_lstm(
         ques_placeholder, ques_mask_placeholder, V, K, nhidden
     )
@@ -150,7 +150,7 @@ def main(config):
     print(ques_embed.get_shape())
     print(ans_embed.get_shape())
     p = probability_networks.simple_mlp(
-        config.emb_dim, config.nlayers, 4,
+        config.nhidden, config.nlayers, 4,
         image_embed, ques_embed, *tf.unpack(ans_embed, axis=1)
     )
     print(p.get_shape())
@@ -227,10 +227,12 @@ def main(config):
                 label_placeholder: label
             }
 
-            _, batch_loss, step = session.run(
-                [train_op, cross_entropy, incr_step],
+            _, batch_loss, step, prs = session.run(
+                [train_op, cross_entropy, incr_step, p],
                 feed_dict=feed_dict
             )
+            print("probs:")
+            print(p)
 
             print("Step %d, Loss: %.3f" % (step, batch_loss))
             if step % config.val_freq == 0:
