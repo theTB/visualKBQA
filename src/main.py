@@ -111,11 +111,7 @@ def main(config):
       with open(cache_file, 'r') as f:
         vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
 
-    # define the graph of the probability network
-    # e_I       embedding of image
-    # e_Q       embedding of question
-    # e_As      list of embeddings of each answer
-    # FIX ME!!! ugly!!!
+    # define the graph
     (ques_placeholder, ques_mask_placeholder, ans_placeholder,
      ans_mask_placeholder, pre_image_embed_placeholder,
      im_vqa_logp, kb_vqa_logp,
@@ -180,6 +176,12 @@ def main(config):
         train_op = optimizer.apply_gradients(capped_grads_and_vars)
         return train_op
 
+    # assume the first one is always the correct one
+    def eval_accuracy(logits):
+        pred = np.argmax(logits, axis=1)
+        acc = np.mean(pred == 0)
+        return acc
+
     train_op, grad_norms = get_train_op(cross_entropy, optimizer)
 
     session = tf.Session()
@@ -193,8 +195,8 @@ def main(config):
     print("Starting Training")
 
     for epoch in xrange(config.nepochs):
-        while data in read_data.vqa_data_iterator(
-            vqa_data, 'train', config.batchsize
+        for data in enumerate(read_data.vqa_data_iterator(
+            vqa_data, 'train', config.batchsize, do_permutation=True)
         ):
             imbed = data['image_embed']
             ques = data['question']
@@ -228,6 +230,31 @@ def main(config):
                     config.log_dir + "/model-epoch%d-step%d" % (epoch, step)
                 )
                 # Do some validation
+                for val_data in enumerate(read_data.vqa_data_iterator(
+                    vqa_data, 'val', config.batchsize, do_permutation=False)
+                ):
+                  imbed = val_data['image_embed']
+                  ques = val_data['question']
+                  qmask = val_data['question_mask']
+                  ans = val_data['answers']
+                  ans_mask = val_data['answers_mask']
+                  im_logp = val_data['im_vqa_logp']
+                  kb_logp = val_data['kb_vqa_logp']
+                  label = val_data['labels']
+                  feed_dict = {
+                      ques_placeholder: ques,
+                      ques_mask_placeholder: qmask,
+                      ans_placeholder: ans,
+                      ans_mask_placeholder: ans_mask,
+                      pre_image_embed_placeholder: imbed,
+                      im_vqa_logp: im_logp,
+                      kb_vqa_logp: kb_logp,
+                      label_placeholder: label
+                  }
+
+                  logit_val = session.run(logits, feed_dict=feed_dict)
+                  accuracy = eval_acc(logit_val, feed_dict[labels])
+                  print("Acccucy of validation: %f", accuracy)
 
 
 if __name__ == "__main__":
