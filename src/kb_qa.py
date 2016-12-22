@@ -20,6 +20,7 @@ grammar = '''
           '''
 chunk_parser = nltk.RegexpParser(grammar)
 stopwords = nltk.corpus.stopwords.words('english')
+stopwords += ['.', '.', '?', "'", ":", ";", "!", "many", "'s"]
 
 def chunker(text):
     tokens = nltk.word_tokenize(text.strip())
@@ -32,6 +33,8 @@ def chunker(text):
     for node in parse_tree:
         if type(node) == nltk.tree.Tree:
             chunk = node.leaves()
+            if len(chunk) > 1 and chunk[0][0] in stopwords:
+                chunk = chunk[1:]
             word = "_".join(map(lambda x: x[0], chunk))
             # print(word)
         else:
@@ -67,15 +70,27 @@ def kb_scores(vqa_data, score_fn, outname):
             q_ents = extract_entities(question)
             ans_ents = map(lambda x: extract_entities(x), answers)
             scores = []
+            print(question)
+            print(q_ents)
             for i, a_ents in enumerate(ans_ents):
+                # a_ents are the entities in each answer
+                print("\t", answers[i])
                 mscore = 0.
                 for ent in a_ents:
                     # score answer entities with question entities and take max
-                    s = max(
-                        map(lambda x: score_fn(x, ent),
-                            [e for e in q_ents if e != ent]
-                        )
+                    sc = map(
+                        lambda x: score_fn(x, ent),
+                        [e for e in q_ents if e != ent]
                     )
+                    if len(sc) > 0:
+                        s  = max(sc)
+                    else:
+                        s = 0.
+                    j = 0
+                    for e in q_ents:
+                        if e != ent:
+                            print("\t\tscore %s %s " %(e, ent), sc[j])
+                            j += 1
                     mscore = max(mscore, s)
                     # print(s)
                     # print(mscore)
