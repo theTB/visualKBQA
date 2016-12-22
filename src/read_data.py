@@ -349,7 +349,7 @@ def vqa_data_iterator(vqa_data, split, batch_size, max_q_len, max_a_len, do_perm
     ans = np.zeros((batch_size, num_ans, max_a_len), dtype=np.int32)
     ans_mask = np.zeros((batch_size, num_ans, max_a_len), dtype=np.int32)
 
-    for idx, data in enumerate(vqa_data[start_idx:end_idx]):
+    for idx, data in enumerate(vqa_data[split][start_idx:end_idx]):
       im_embed[idx,:] = data['im_embed']
       im_logp[idx,:] = data['im_logp']
       kb_logp[idx,:] = data['kb_logp']
@@ -358,19 +358,17 @@ def vqa_data_iterator(vqa_data, split, batch_size, max_q_len, max_a_len, do_perm
       q_len = len(data['question_tk_ids'])
       ques[idx, :q_len] = data['question_tk_ids']
       ques_mask[idx, :q_len] = 1      # FIX ME!!! potentially a bug
-      for jdx, ans in enumerate(data['multiple_choices_tk_ids']):
-        a_len = len(ans)
-        ans[idx, jdx, :a_len] = ans
+      for jdx, choice in enumerate(data['multiple_choices_tk_ids']):
+        a_len = len(choice)
+        ans[idx, jdx, :a_len] = choice
         ans_mask[idx, jdx, :a_len] = 1
 
       if do_permutation:
-        rand_idx = np.random.permutation(num_ans)
-        im_embed = im_embed[:, rand_idx]
+        rand_idx = [0, 1, 2, 3]
+        np.random.shuffle(rand_idx)
         im_logp = im_logp[:, rand_idx]
         kb_logp = kb_logp[:, rand_idx]
         label = label[:, rand_idx]
-        ques = ques[:, rand_idx, :]
-        ques_mask = ques_mask[:, rand_idx, :]
         ans = ans[:, rand_idx, :]
         ans_mask = ans_mask[:, rand_idx, :]
 
