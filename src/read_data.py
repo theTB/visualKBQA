@@ -97,8 +97,8 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
       qp['multiple_choices'] = [qp['answer']] + qp['multiple_choices']
       qa_data[split].append(qp)
 
-  with open(ground_annot_file, 'r') as f:
-    ground_data = json.load(f)['boxes']
+  # with open(ground_annot_file, 'r') as f:
+  #   ground_data = json.load(f)['boxes']
 
   # # build a map from qa_id to image id, to group visual concepts in an image
   # qa_id_image_id = {}
@@ -145,8 +145,8 @@ def append_image_vqa_results(vqa_data, image_vqa_results_file):
 
   Output
     Similar vqa_data, but each of the dictionary contains more data as follows
-      logp      a list of float values, where each entry is the average negative log likelihood
-                of all words in each candidate answer.
+      im_logp      a list of float values, where each entry is the average negative log likelihood
+                   of all words in each candidate answer.
   '''
   with open(image_vqa_results_file, 'r') as f:
     predictions = json.load(f)
@@ -159,7 +159,7 @@ def append_image_vqa_results(vqa_data, image_vqa_results_file):
 
     for p in predictions[split]:
       idx = qa_id_arr_idx[p['qa_id']]
-      vqa_data[split][idx]['logp'] = p['logp']
+      vqa_data[split][idx]['im_logp'] = p['logp']
       # for check purpose
 #       vqa_data[split][idx]['cquestion'] = p['question']
 #       vqa_data[split][idx]['canswers'] = p['answers']
@@ -284,6 +284,7 @@ def encode_question_answer(vqa_data, vocabulary):
     for i, qd in enumerate(vqa_data[split]):
       words = tokenize_sentence(qd['question'])
       vqa_data[split][i]['question_tk_ids'] = [vocabulary.get(w, UNK_ID) for w in words]
+      vqa_data[split][i]['multiple_choices_tk_ids'] = [[] for _ in qd['multiple_choices']]
 
       for j, mc in enumerate(qd['multiple_choices']):
         words = tokenize_sentence(mc)
@@ -297,44 +298,87 @@ def preprocess_raw_vqa_data(vqa_data, word_count_threshold, verbose=False):
 
   return vqa_data, vocab, max_q_len, max_a_len
 
-def vqa_data_iterator(vqa_data, split, batch_size, neg_ratio=0.75):
+def vqa_data_iterator(vqa_data, split, batch_size, max_q_len, max_a_len, do_permutation=False):
   """
   Iterate on the raw vqa data.
   Args:
-    vqa_data:     output of preprocess_raw_vqa_data
-    split:        'train'|'val'|'test'
-    batch_size:   int, the batch size
-    neg_ratio     float, the ratio of negative samples in a batch
+    vqa_data:         output of preprocess_raw_vqa_data
+    split:            'train'|'val'|'test'
+    batch_size:       int, the batch size
+    max_q_len         maximum length of a question
+    max_a_len         maximum length of an answer
+    do_permutation    if to randomly shuffle the four candidate answers
   Returns:
-    a list of dictionary
+    A dictionary has following fields:
+      imbed = data['image_embed']
+      ques = data['question']
+      qmask = data['question_mask']
+      ans = data['answers']
+      ans_mask = data['answers_mask']
+      im_logp = data['im_vqa_logp']
+      kb_logp = data['kb_vqa_logp']
+      label = data['labels']
   """
   data_len = len(vqa_data[split])
   batch_len = data_len // batch_size
 
-  pos_vqa_data = []
-  neg_vqa_data = []
-  for d in vqa_data:
-    d['answer'] = d['multiple_choices'][0]
-    d['answer_tk_ids'] = d['multiple_choices_tk_ids'][0]
-    pos_vqa_data.append(d)
+  np.random.shuffle(vqa_data[split])
 
-    for i in xrange(3):
-      d['answer'] = d['multiple_choices'][i+1]
-      d['answer_tk_ids'] = d['multiple_choices_tk_ids'][i+1]
-      neg_vqa_data.append(d)
-
-  np.random.shuffle(pos_vqa_data)
-  np.random.shuffle(neg_vqa_data)
-
-  num_pos_per_batch = int(batch_size * (1 - neg_ratio))
-  num_neg_per_batch = batch_size - num_pos_per_batch
+  im_embed_dim = 4096
+  num_ans = 4
 
   for i in range(batch_len):
-    start_pos_idx = i * num_pos_per_batch
-    end_pos_idx = start_idx + num_pos_per_batch
+    start_idx = i * batch_size
+    end_idx = start_idx + batch_size
 
+    im_embed = np.zeros((batch_size, im_embed_dim), dtype=np.float32)
+    im_logp = np.zeros((batch_size, num_ans), dtype=np.float32)
+    kb_logp = np.zeros((batch_size, num_ans), dtype=np.float32)
+    label = np.zeros((batch_size, num_ans), dtype=np.float32)
 
-    start_neg_idx = i * num_neg_per_batch
-    end_neg_idx = start_neg_idx + num_neg_per_batch
+    # max_q_len = -1
+    # max_a_len = -1
 
-    yield vqa_data[split][start_idx:end_idx]
+    # for idx, data in enumerate(vqa_data[start_idx:end_idx]):
+    #   max_q_len = max(max_q_len, len(data['question_tk_ids']))
+    #   for ans in data['multiple_choices_tk_ids']:
+    #     max_a_len = max(max_a_len, len(ans))
+
+    ques = np.zeros((batch_size, max_q_len), dtype=np.float32)
+    ques_mask = np.zeros((batch_size, max_q_len), dtype=np.float32)
+    ans = np.zeros((batch_size, num_ans, max_a_len), dtype=np.float32)
+    ans_mask = np.zeros((batch_size, num_ans, max_a_len), dtype=np.float32)
+
+    for idx, data in enumerate(vqa_data[start_idx:end_idx]):
+      im_embed[idx,:] = data['im_embed']
+      im_logp[idx,:] = data['im_logp']
+      kb_logp[idx,:] = data['kb_logp']
+      label[idx,:] = [1, 0, 0, 0]
+
+      q_len = len(data['question_tk_ids'])
+      ques[idx, :q_len] = data['question_tk_ids']
+      ques_mask[idx, :q_len] = 1      # FIX ME!!! potentially a bug
+      for jdx, ans in enumerate(data['multiple_choices_tk_ids']):
+        a_len = len(ans)
+        ans[idx, jdx, :a_len] = ans
+        ans_mask[idx, jdx, :a_len] = 1
+
+      if do_permutation:
+        rand_idx = np.random.permutation(num_ans)
+        im_embed = im_embed[:, rand_idx]
+        im_logp = im_logp[:, rand_idx]
+        kb_logp = kb_logp[:, rand_idx]
+        label = label[:, rand_idx]
+        ques = ques[:, rand_idx, :]
+        ques_mask = ques_mask[:, rand_idx, :]
+        ans = ans[:, rand_idx, :]
+        ans_mask = ans_mask[:, rand_idx, :]
+
+    yield {'image_embed': im_embed,
+           'question': ques,
+           'question_mask': ques_mask,
+           'answers': ans,
+           'answers_mask': ans_mask,
+           'im_logp': im_logp,
+           'kb_logp': kb_logp,
+           'label': label}

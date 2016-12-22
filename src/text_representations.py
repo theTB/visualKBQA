@@ -19,11 +19,11 @@ def embedding_lookup(text, mask, V, K, initialize=None):
         embed: (Tensor) B x maxlen x K tensor of embeddings
     '''
     pad_embedding = tf.constant(
-        np.zeros((1, K), dtype=np.float64), name="pad_embedding"
+        np.zeros((1, K), dtype=np.float32), name="pad_embedding"
     )
     embeddings = tf.concat(0,
         [pad_embedding,
-         tf.Variable(tf.random_uniform([V, K], -.001, .001, dtype=tf.float64),
+         tf.Variable(tf.random_uniform([V, K], -.001, .001, dtype=tf.float32),
          name='embeddings')
         ]
     )
@@ -33,7 +33,7 @@ def embedding_lookup(text, mask, V, K, initialize=None):
 
 
 def bidir_lstm_model(
-        text, mask, V, K, nhidden, nlayers=1
+        text, mask, V, K, nhidden, nlayers=1,
         peepholes=False, initialize=None, dropouts=None
     ):
     '''
@@ -67,7 +67,7 @@ def bidir_lstm_model(
         lstm_outputs, _ = tf.nn.bidirectional_dynamic_rnn(
             cell_fw=fwd_cell, cell_bw=bwd_cell, inputs=embeddings,
             sequence_length=tf.cast(tf.reduce_sum(mask, 1), tf.int32),
-            dtype=tf.float64
+            dtype=tf.float32
         )
         fwd_outputs, bwd_outputs = lstm_outputs
         inputs = tf.concat(2, [fwd_outputs, bwd_outputs])

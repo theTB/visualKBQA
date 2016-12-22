@@ -13,7 +13,7 @@ import time
 import cPickle
 
 import image_networks
-import question_networks
+import qa_text_networks
 import probability_networks
 import read_data
 
@@ -44,7 +44,7 @@ def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
         tf.int32, shape=(batchsize, numans, maxalen)
     )
 
-    image_placeholder = tf.placeholder(
+    image_embed_placeholder = tf.placeholder(
         tf.float32, shape=(batchsize, image_embed_dim)
     )
 
@@ -61,10 +61,10 @@ def input_placeholders(batchsize, maxqlen, maxalen, maxrlen, maxelen, numans,
         tf.float32, shape=(batchsize, numans)
     )
 
-    return ques_placeholder, ques_mask_placeholder,
-           ans_placeholder, ans_mask_placeholder,
-           image_embed_placeholder,
-           im_vqa_logp, kb_vqa_logp
+    return ques_placeholder, ques_mask_placeholder, \
+           ans_placeholder, ans_mask_placeholder, \
+           image_embed_placeholder, \
+           im_vqa_logp, kb_vqa_logp, \
            label_placeholder
 
 
@@ -98,7 +98,7 @@ def main(config):
       vqa_data = read_data.read_visual7w_dataset(config.data_file, '')
       vqa_data = read_data.append_image_vqa_results(vqa_data, config.im_vqa_file)
       vqa_data = read_data.append_image_embeddings(vqa_data, config.im_embed_file)
-      vqa_data, vocab, maxqlen, maxalen = preprocess_raw_vqa_data(vqa_data, config.word_cnt_thresh, verbose=config.verbose)
+      vqa_data, vocab, maxqlen, maxalen = read_data.preprocess_raw_vqa_data(vqa_data, config.word_cnt_thresh, verbose=config.verbose)
 
       # assume the KB scores are available
       for split in ['train', 'val', 'test']:
@@ -111,11 +111,7 @@ def main(config):
       with open(cache_file, 'r') as f:
         vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
 
-    # define the graph of the probability network
-    # e_I       embedding of image
-    # e_Q       embedding of question
-    # e_As      list of embeddings of each answer
-    # FIX ME!!! ugly!!!
+    # define the graph
     (ques_placeholder, ques_mask_placeholder, ans_placeholder,
      ans_mask_placeholder, pre_image_embed_placeholder,
      im_vqa_logp, kb_vqa_logp,
@@ -125,16 +121,16 @@ def main(config):
     )
 
     # image embedding
-    image_embed_w = tf.Variable(tf.zeros([4096, emb_dim]))
-    image_embed_b = tf.Variable(tf.zeros([emb_dim]))
+    image_embed_w = tf.Variable(tf.zeros([4096, config.emb_dim]))
+    image_embed_b = tf.Variable(tf.zeros([config.emb_dim]))
     image_embed = tf.nn.relu(
         tf.matmul(pre_image_embed_placeholder, image_embed_w) + image_embed_b
     )
 
     # question embedding
     V = len(vocab.keys())
-    K = emb_dim
-    nhidden = emb_dim
+    K = config.emb_dim
+    nhidden = config.emb_dim
     ques_embed = qa_text_networks.question_lstm(
         ques_placeholder, ques_mask_placeholder, V, K, nhidden
     )
@@ -147,7 +143,7 @@ def main(config):
 
     # probability network
     p = probability_networks.simple_mlp(
-        emb_dim, config.nlayers, 4,
+        config.emb_dim, config.nlayers, 4,
         [image_embed, ques_embed] + tf.unstack(ans_embed, axis=1)
     )
 
@@ -176,9 +172,16 @@ def main(config):
         capped_grads_and_vars = [(capped_grads[i], gv[1])
                                  for i, gv in enumerate(grads_and_vars)]
         # norms of gradients for debugging
-        grad_norms = [tf.sqrt(tf.reduce_sum(tf.square(grad))) for grad, _ in grads_and_vars]
+        grad_norms = [tf.sqrt(tf.reduce_sum(tf.square(grad)))
+                      for grad, _ in grads_and_vars]
         train_op = optimizer.apply_gradients(capped_grads_and_vars)
         return train_op
+
+    # assume the first one is always the correct one
+    def eval_accuracy(logits):
+        pred = np.argmax(logits, axis=1)
+        acc = np.mean(pred == 0)
+        return acc
 
     train_op, grad_norms = get_train_op(cross_entropy, optimizer)
 
@@ -193,8 +196,8 @@ def main(config):
     print("Starting Training")
 
     for epoch in xrange(config.nepochs):
-        while data in read_data.vqa_data_iterator(
-            vqa_data, 'train', config.batchsize
+        for data in enumerate(read_data.vqa_data_iterator(
+            vqa_data, 'train', config.batchsize, maxqlen, maxalen, do_permutation=True)
         ):
             imbed = data['image_embed']
             ques = data['question']
@@ -228,6 +231,31 @@ def main(config):
                     config.log_dir + "/model-epoch%d-step%d" % (epoch, step)
                 )
                 # Do some validation
+                for val_data in enumerate(read_data.vqa_data_iterator(
+                    vqa_data, 'val', config.batchsize, maxqlen, maxalen, do_permutation=False)
+                ):
+                  imbed = val_data['image_embed']
+                  ques = val_data['question']
+                  qmask = val_data['question_mask']
+                  ans = val_data['answers']
+                  ans_mask = val_data['answers_mask']
+                  im_logp = val_data['im_vqa_logp']
+                  kb_logp = val_data['kb_vqa_logp']
+                  label = val_data['labels']
+                  feed_dict = {
+                      ques_placeholder: ques,
+                      ques_mask_placeholder: qmask,
+                      ans_placeholder: ans,
+                      ans_mask_placeholder: ans_mask,
+                      pre_image_embed_placeholder: imbed,
+                      im_vqa_logp: im_logp,
+                      kb_vqa_logp: kb_logp,
+                      label_placeholder: label
+                  }
+
+                  logit_val = session.run(logits, feed_dict=feed_dict)
+                  accuracy = eval_acc(logit_val, feed_dict[labels])
+                  print("Acccucy of validation: %f", accuracy)
 
 
 if __name__ == "__main__":
@@ -240,8 +268,8 @@ if __name__ == "__main__":
     # -------- Huaizu: we currently don't need this parameter as train/val/test split has been done -------
     # p.add_argument('--val-ratio', default=0.05, type=float,
     #                help='ratio for validation split')
-    p.add_argument('--maxqlen', default=-1, type=int, help='max question length')
-    p.add_argument('--maxalen', default=-1, type=int, help='max answer length')
+    # p.add_argument('--maxqlen', default=-1, type=int, help='max question length')
+    # p.add_argument('--maxalen', default=-1, type=int, help='max answer length')
     p.add_argument('--batchsize', default=128, type=int, help='batchsize')
     p.add_argument('--emb_dim', default=100, type=int,
                    help='size of word embeddings')
@@ -279,6 +307,10 @@ if __name__ == "__main__":
                    help='a threshold of word occurences, below the threshold, a word will be replaced by UNK token')
     p.add_argument('--verbose', required=False, default=False, type=bool,
                    help='if to display intermediate results')
+    p.add_argument('--im_vqa_file', required=True, type=str,
+                   help='results file of pure image vqa')
+    p.add_argument('--im_embed_file', required=True, type=str,
+                   help='file of pre-computed image embeddings')
 
     config = p.parse_args()
 
