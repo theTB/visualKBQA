@@ -101,11 +101,15 @@ def main(config):
       vqa_data = read_data.append_image_embeddings(vqa_data, config.im_embed_file)
       vqa_data, vocab, maxqlen, maxalen = read_data.preprocess_raw_vqa_data(vqa_data, config.word_cnt_thresh, verbose=config.verbose)
 
-      # assume the KB scores are available
-      for split in ['train', 'val', 'test']:
-        for i in xrange(len(vqa_data[split])):
-          vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.45)   #[0.1, 0.55)
-          vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
+      if config.kb_vqa_file:
+          print("Adding KB results from file")
+          vqa_data = read_data.append_kb_vqa_results(vqa_data, config.kb_vqa_file)
+      else:
+          # assume the KB scores are available
+          for split in ['train', 'val', 'test']:
+            for i in xrange(len(vqa_data[split])):
+              vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.45)   #[0.1, 0.55)
+              vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
 
       with open(cache_file, 'w') as f:
         cPickle.dump((vqa_data, vocab, maxqlen, maxalen), f)
@@ -332,6 +336,8 @@ if __name__ == "__main__":
                    help='if to display intermediate results')
     p.add_argument('--im_vqa_file', required=True, type=str,
                    help='results file of pure image vqa')
+    p.add_argument('--kb_vqa_file', required=False, type=str,
+                   help='results pickle file of kb vqa')
     p.add_argument('--im_embed_file', required=True, type=str,
                    help='file of pre-computed image embeddings')
 

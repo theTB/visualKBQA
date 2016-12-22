@@ -5,6 +5,7 @@ from __future__ import print_function
 import numpy as np
 import json
 import cPickle
+import pickle
 import os
 import string
 
@@ -160,6 +161,39 @@ def append_image_vqa_results(vqa_data, image_vqa_results_file):
     for p in predictions[split]:
       idx = qa_id_arr_idx[p['qa_id']]
       vqa_data[split][idx]['im_logp'] = p['logp']
+      # for check purpose
+#       vqa_data[split][idx]['cquestion'] = p['question']
+#       vqa_data[split][idx]['canswers'] = p['answers']
+
+  return vqa_data
+
+def append_kb_vqa_results(vqa_data, kb_vqa_results_file):
+  '''
+  Augment the visual question answering dataset with predicted answers from a pure image vqa model.
+
+  Input
+    vqa_data                  data returned by the read_visual7w_dataset function
+    image_vqa_results_file    file path containing the image vqa predictions
+
+  Output
+    Similar vqa_data, but each of the dictionary contains more data as follows
+      im_logp      a list of float values, where each entry is the average negative log likelihood
+                   of all words in each candidate answer.
+  '''
+  with open(kb_vqa_results_file, 'r') as f:
+    predictions = pickle.load(f)
+
+  for split in ['train', 'val', 'test']:
+    # build qa_id to array index map
+    qa_id_arr_idx = {}
+    for idx, qa in enumerate(vqa_data[split]):
+      qa_id_arr_idx[qa['qa_id']] = idx
+
+    for pred in predictions[split]:
+      qa_id = pred['qa_id']]
+      idx = qa_id_arr_idx[qa_id]
+      vqa_data[split][idx]['kb_logp'] = pred['logp']
+      assert(vqa_data[split][idx]['qa_id'] == qa_id)
       # for check purpose
 #       vqa_data[split][idx]['cquestion'] = p['question']
 #       vqa_data[split][idx]['canswers'] = p['answers']
