@@ -101,18 +101,18 @@ def main(config):
       vqa_data = read_data.append_image_embeddings(vqa_data, config.im_embed_file)
       vqa_data, vocab, maxqlen, maxalen = read_data.preprocess_raw_vqa_data(vqa_data, config.word_cnt_thresh, verbose=config.verbose)
 
-      # assume the KB scores are available
-      for split in ['train', 'val', 'test']:
-        for i in xrange(len(vqa_data[split])):
-          vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.45)   #[0.1, 0.55)
-          vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
-
       with open(cache_file, 'w') as f:
         cPickle.dump((vqa_data, vocab, maxqlen, maxalen), f)
     else:
       print("Loading Data from cache...")
       with open(cache_file, 'r') as f:
         vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
+
+    # assume the KB scores are available
+    for split in ['train', 'val', 'test']:
+      for i in xrange(len(vqa_data[split])):
+        vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.85)   #[0.1, 0.55)
+        # vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
 
     print("Data loaded")
     # define the graph
@@ -191,8 +191,9 @@ def main(config):
     # assume the first one is always the correct one
     def eval_accuracy(logits, labels):
         pred = np.argmax(logits, axis=1)
+        gt = np.argmax(labels, axis=1)
         # acc = np.mean(np.equal(pred, labels))
-        acc = np.sum(np.equal(pred, 0))
+        acc = np.sum(np.equal(pred, gt))
         return acc
 
     session = tf.Session()
