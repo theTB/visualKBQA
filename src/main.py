@@ -150,7 +150,7 @@ def main(config):
     print(ques_embed.get_shape())
     print(ans_embed.get_shape())
     p = probability_networks.simple_mlp(
-        config.nhidden, config.nlayers, 1,
+        config.nhidden, config.nlayers, 4,
         image_embed, ques_embed, *tf.unpack(ans_embed, axis=1)
     )
     print(p.get_shape())
