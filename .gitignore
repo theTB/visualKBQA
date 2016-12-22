@@ -2,7 +2,7 @@
 .DS_STORE
 *.pyc
 *.pickle
-run.sh
+# run.sh
 /tmp
 /cache
 /logs

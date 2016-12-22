@@ -344,10 +344,10 @@ def vqa_data_iterator(vqa_data, split, batch_size, max_q_len, max_a_len, do_perm
     #   for ans in data['multiple_choices_tk_ids']:
     #     max_a_len = max(max_a_len, len(ans))
 
-    ques = np.zeros((batch_size, max_q_len), dtype=np.float32)
-    ques_mask = np.zeros((batch_size, max_q_len), dtype=np.float32)
-    ans = np.zeros((batch_size, num_ans, max_a_len), dtype=np.float32)
-    ans_mask = np.zeros((batch_size, num_ans, max_a_len), dtype=np.float32)
+    ques = np.zeros((batch_size, max_q_len), dtype=np.int32)
+    ques_mask = np.zeros((batch_size, max_q_len), dtype=np.int32)
+    ans = np.zeros((batch_size, num_ans, max_a_len), dtype=np.int32)
+    ans_mask = np.zeros((batch_size, num_ans, max_a_len), dtype=np.int32)
 
     for idx, data in enumerate(vqa_data[start_idx:end_idx]):
       im_embed[idx,:] = data['im_embed']
