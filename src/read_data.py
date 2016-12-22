@@ -190,7 +190,7 @@ def append_kb_vqa_results(vqa_data, kb_vqa_results_file):
       qa_id_arr_idx[qa['qa_id']] = idx
 
     for pred in predictions[split]:
-      qa_id = pred['qa_id']]
+      qa_id = pred['qa_id']
       idx = qa_id_arr_idx[qa_id]
       vqa_data[split][idx]['kb_logp'] = pred['logp']
       assert(vqa_data[split][idx]['qa_id'] == qa_id)
