@@ -20,12 +20,12 @@ def getVec(We,words,t):
         vec = We[words[array[0]],:]
     else:
         vec = We[words['UUUNKKK'],:]
-        print 'can not find corresponding vector:',array[0].lower()
+        # print 'can not find corresponding vector:',array[0].lower()
     for i in range(len(array)-1):
         if array[i+1] in words:
             vec = vec + We[words[array[i+1]],:]
         else:
-            print 'can not find corresponding vector:',array[i+1].lower()
+            # print 'can not find corresponding vector:',array[i+1].lower()
             vec = vec + We[words['UUUNKKK'],:]
     vec = vec/len(array)
     return vec

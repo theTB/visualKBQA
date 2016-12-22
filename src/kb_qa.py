@@ -64,6 +64,9 @@ def kb_scores(vqa_data, score_fn, outname, verbose=True):
     all_scores = {}
     for split in ['train', 'val', 'test']:
         all_scores[split] = []
+        total = len(vqa_data[split])
+        print(split + " set, total ", total)
+        cnt = 0
         for qa_example in vqa_data[split]:
             qid = qa_example['qa_id']
             question = qa_example['question']
@@ -78,7 +81,7 @@ def kb_scores(vqa_data, score_fn, outname, verbose=True):
                 # a_ents are the entities in each answer
                 if verbose:
                     print("\t", answers[i])
-                mscore = 0.
+                mscore = 1e-6
                 for ent in a_ents:
                     # score answer entities with question entities and take max
                     sc = map(
@@ -88,7 +91,7 @@ def kb_scores(vqa_data, score_fn, outname, verbose=True):
                     if len(sc) > 0:
                         s  = max(sc)
                     else:
-                        s = 0.
+                        s = 1e-6
                     if verbose:
                         j = 0
                         for e in q_ents:
@@ -101,6 +104,9 @@ def kb_scores(vqa_data, score_fn, outname, verbose=True):
                 scores.append(-np.log(mscore))
                 if verbose:
                     print(question, " ", answers[i], " score: ", mscore)
+            cnt += 1
+            if cnt % 500 == 0:
+                print("  %d of %d done" % (cnt, total))
 
             ans = {'qa_id': qid,
                    'multiple_choices': answers,
