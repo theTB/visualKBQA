@@ -97,7 +97,7 @@ def main(config):
     if not os.path.exists(cache_file):
       print("Loading and Processing Data from raw...")
       vqa_data = read_data.read_visual7w_dataset(config.data_file, '')
-      vqa_data = read_data.append_image_vqa_results(vqa_data, config.im_vqa_file)
+      vqa_data = read_data.append_image_vqa_results(vqa_data, config.im_vqa_file, config.im_vqa_noise)
       vqa_data = read_data.append_image_embeddings(vqa_data, config.im_embed_file)
       vqa_data, vocab, maxqlen, maxalen = read_data.preprocess_raw_vqa_data(vqa_data, config.word_cnt_thresh, verbose=config.verbose)
 
@@ -198,8 +198,9 @@ def main(config):
         pred = np.argmax(logits, axis=1)
         gt = np.argmax(labels, axis=1)
         # acc = np.mean(np.equal(pred, labels))
-        acc = np.sum(np.equal(pred, gt))
-        return acc
+        correct = np.equal(pred, gt)
+        acc = np.sum(correct)
+        return acc, correct
 
     session = tf.Session()
 
@@ -256,6 +257,8 @@ def main(config):
                 )
                 # Do some validation
                 acc = 0
+                acc_kb = 0
+                acc_im = 0
                 cnt = 0
                 for val_data in read_data.vqa_data_iterator(
                     vqa_data, 'val', config.batchsize, maxqlen, maxalen, do_permutation=False
@@ -280,11 +283,18 @@ def main(config):
                   }
 
                   logit_val = session.run(logits, feed_dict=feed_dict)
-                  accuracy = eval_accuracy(logit_val, label)
+                  accuracy, correct = eval_accuracy(logit_val, label)
                   acc += accuracy
+                  accuracy_kb, correct_kb = eval_accuracy(-kb_logp, label)
+                  acc_kb += accuracy_kb
+                  accuracy_im, correct_im = eval_accuracy(-im_logp, label)
+                  acc_im += accuracy_im
                   cnt += label.shape[0]
 
                 print("Acccucy of validation: %f" % (acc / cnt))
+                print("KB only Accuracy of validation: %f" % (acc_kb / cnt))
+                print("IM only Accuracy of validation: %f" % (acc_im / cnt))
+                print("Overlap of correct answers KB & IM ", np.sum(np.equal(correct_im, correct_kb)))
 
 
 if __name__ == "__main__":
@@ -338,6 +348,8 @@ if __name__ == "__main__":
                    help='if to display intermediate results')
     p.add_argument('--im_vqa_file', required=True, type=str,
                    help='results file of pure image vqa')
+    p.add_argument('--im_vqa_noise', default=0.3, type=float,
+                   help='add noise to pure image vqa')
     p.add_argument('--kb_vqa_file', required=False, type=str,
                    help='results pickle file of kb vqa')
     p.add_argument('--im_embed_file', required=True, type=str,
