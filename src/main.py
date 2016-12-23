@@ -141,8 +141,20 @@ def main(config):
     )
 
     # image embedding
-    image_embed_w = tf.Variable(tf.zeros([4096, config.nhidden]))
-    image_embed_b = tf.Variable(tf.zeros([config.nhidden]))
+    # image_embed_w = tf.Variable(tf.zeros([4096, config.nhidden]))
+    # image_embed_b = tf.Variable(tf.zeros([config.nhidden]))
+    image_embed_w = tf.Variable(
+        tf.random_normal(
+            [4096, config.nhidden], mean=0, stddev=0.01, dtype=tf.float32
+        ),
+        name="W_image"
+    )
+    image_embed_b = tf.Variable(
+        tf.random_normal(
+            [1, config.nhidden], mean=0, stddev=0.01, dtype=tf.float32
+        ),
+        name="b_image"
+    )
     image_embed = tf.nn.relu(
         tf.matmul(pre_image_embed_placeholder, image_embed_w) + image_embed_b
     )
@@ -166,18 +178,25 @@ def main(config):
     print(ques_embed.get_shape())
     print(ans_embed.get_shape())
     pnet = probability_networks.simple_mlp(
-        config.nhidden, config.nlayers, 1,
+        config.nhidden, config.nlayers, 4,
         image_embed, ques_embed, *tf.unpack(ans_embed, axis=1)
     )
     print(pnet.get_shape())
 
     # combine image- and kb-vqa results
     # logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_logp)
-    logits = tf.log(pnet * tf.exp(-im_vqa_logp) + (1 - pnet) * tf.exp(-kb_vqa_logp))
+    # logits = tf.log(pnet * tf.exp(-im_vqa_logp) + (1 - pnet) * tf.exp(-kb_vqa_logp))
+    logits = tf.mul(pnet, -im_vqa_logp) + tf.mul(1 - pnet, -kb_vqa_logp)
 
     # loss
+    # cross_entropy = tf.reduce_mean(
+    #     tf.nn.softmax_cross_entropy_with_logits(logits, label_placeholder)
+    # )
     cross_entropy = tf.reduce_mean(
-        tf.nn.softmax_cross_entropy_with_logits(logits, label_placeholder)
+        tf.reduce_sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(logits, label_placeholder),
+            1
+        )
     )
 
     # optimizer
@@ -188,21 +207,24 @@ def main(config):
     def get_train_op(loss, optimizer):
         variables = tf.trainable_variables()
         grads_and_vars = optimizer.compute_gradients(loss, variables)
-        # var_names = [v.name for v in variables]
+        var_names = [v.name for v in variables]
         grad_var_norms = [(tf.global_norm([gv[1]]), tf.global_norm([gv[0]]))
                           for gv in grads_and_vars]
-        capped_grads, global_norm = tf.clip_by_global_norm(
-            [gv[0] for gv in grads_and_vars], config.grad_clip
-        )
-        capped_grads_and_vars = [(capped_grads[i], gv[1])
-                                 for i, gv in enumerate(grads_and_vars)]
+        # capped_grads, global_norm = tf.clip_by_global_norm(
+        #     [gv[0] for gv in grads_and_vars], config.grad_clip
+        # )
+        # capped_grads_and_vars = [(capped_grads[i], gv[1])
+        #                          for i, gv in enumerate(grads_and_vars)]
+        # capped_grads_and_vars = [(tf.clip_by_norm(gv[0], config.grad_clip), gv[1])
+        #                          for gv in grads_and_vars]
+        capped_grads_and_vars = grads_and_vars
         # norms of gradients for debugging
         grad_norms = [tf.sqrt(tf.reduce_sum(tf.square(grad)))
                       for grad, _ in grads_and_vars]
         train_op = optimizer.apply_gradients(capped_grads_and_vars)
-        return train_op, grad_norms
+        return train_op, grad_var_norms, var_names
 
-    train_op, grad_norms = get_train_op(cross_entropy, optimizer)
+    train_op, grad_var_norms, var_names = get_train_op(cross_entropy, optimizer)
 
     # assume the first one is always the correct one
     def eval_accuracy(logits, labels):
@@ -222,6 +244,7 @@ def main(config):
     session.run(init_op)
 
     print("Starting Training")
+    best_val_score = 0
 
     im_noise = config.im_vqa_noise
     for epoch in xrange(config.epochs):
@@ -252,8 +275,18 @@ def main(config):
                 label_placeholder: label
             }
 
+            gnorms = session.run(grad_var_norms, feed_dict=feed_dict)
+            for i, gnorm_val in enumerate(gnorms):
+                print(var_names[i] + ": norm:%.6f  grad norm:%.6f"  % (
+                    gnorm_val[0], gnorm_val[1]
+                ))
+                sys.stdout.flush()
+            print("\tgrad norms  max: %.5f min: %.5f avg:%.5f" % (
+                np.max(gnorms), np.min(gnorms), np.mean(gnorms)
+            ))
+
             _, batch_loss, step, prs = session.run(
-                [train_op, cross_entropy, incr_step, p],
+                [train_op, cross_entropy, incr_step, pnet],
                 feed_dict=feed_dict
             )
             print("probs:")
@@ -329,7 +362,68 @@ def main(config):
                 print("Overlap of answers KB & IM ", common)
                 print("Correct answers of KB which is correct for IM ", kb_and_im)
                 print("Correct answers of KB which is incorrect for IM ", kb_not_in_im)
+                print("Current best val accuracy: ", best_val_score)
+                if acc > best_val_score:
+                    best_val_score = acc
+                    saver.save(
+                        session,
+                        config.log_dir + "/model-best"
+                    )
+        # Do test
+        saver.restore(session, config.log_dir + "/model-best")
+        acc = 0
+        acc_kb = 0
+        acc_im = 0
+        cnt = 0
+        common = 0
+        kb_not_in_im = 0
+        kb_and_im = 0
+        for val_data in read_data.vqa_data_iterator(
+            vqa_data, 'test', config.batchsize, maxqlen, maxalen, do_permutation=True
+        ):
+          imbed = val_data['image_embed']
+          ques = val_data['question']
+          qmask = val_data['question_mask']
+          ans = val_data['answers']
+          ans_mask = val_data['answers_mask']
+          im_logp = val_data['im_logp']
+          kb_logp = val_data['kb_logp']
+          label = val_data['label']
+          feed_dict = {
+              ques_placeholder: ques,
+              ques_mask_placeholder: qmask,
+              ans_placeholder: ans,
+              ans_mask_placeholder: ans_mask,
+              pre_image_embed_placeholder: imbed,
+              im_vqa_logp: im_logp,
+              kb_vqa_logp: kb_logp,
+              label_placeholder: label
+          }
 
+          logit_val = session.run(logits, feed_dict=feed_dict)
+          accuracy, correct = eval_accuracy(logit_val, label)
+          acc += accuracy
+          accuracy_kb, correct_kb = eval_accuracy(-kb_logp, label)
+          acc_kb += accuracy_kb
+          accuracy_im, correct_im = eval_accuracy(-im_logp, label)
+          acc_im += accuracy_im
+          cnt += label.shape[0]
+          common += np.sum(np.equal(correct_im, correct_kb))
+          kb_not_in_im += np.sum(np.logical_and(
+            correct_kb, np.logical_not(correct_im)
+            )
+          )
+          kb_and_im += np.sum(np.logical_and(
+            correct_kb, correct_im
+            )
+          )
+
+        print("Acccucy of Test: %f" % (acc / cnt))
+        print("KB only Accuracy of Test: %f" % (acc_kb / cnt))
+        print("IM only Accuracy of Test: %f" % (acc_im / cnt))
+        print("Overlap of answers KB & IM ", common)
+        print("Correct answers of KB which is correct for IM ", kb_and_im)
+        print("Correct answers of KB which is incorrect for IM ", kb_not_in_im)
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description='Image QA using ConceptNet')
@@ -358,11 +452,11 @@ if __name__ == "__main__":
                    help='steps for lr decay')
     p.add_argument('--decay_rate', default=0.96, type=float,
                    help='rate for lr decay')
-    p.add_argument('--epochs', default=3, type=int,
+    p.add_argument('--epochs', default=1, type=int,
                    help='number of train epochs')
     p.add_argument('--val_freq', default=20, type=int,
                    help='validation frequency')
-    p.add_argument('--grad_clip', default=50.0, type=float,
+    p.add_argument('--grad_clip', default=100.0, type=float,
                    help='clip l2 norm of gradients at this value')
     p.add_argument('--nhidden', default=100, type=int,
                    help='number of final hidden units, only for some models')
