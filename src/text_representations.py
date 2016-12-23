@@ -53,6 +53,7 @@ def bidir_lstm_model(
     '''
     with tf.variable_scope(namescope):
         embeddings = embedding_lookup(text, mask, V, K, initialize)
+        dropouts=None
 
         if dropouts:
             inputs = tf.nn.dropout(embeddings, dropouts[0])
