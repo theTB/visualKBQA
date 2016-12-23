@@ -136,7 +136,7 @@ def read_visual7w_dataset(qa_file, ground_annot_file):
 
   return qa_data
 
-def append_image_vqa_results(vqa_data, image_vqa_results_file, noise=0.1):
+def append_image_vqa_results(vqa_data, image_vqa_results_file):
   '''
   Augment the visual question answering dataset with predicted answers from a pure image vqa model.
 
@@ -160,8 +160,6 @@ def append_image_vqa_results(vqa_data, image_vqa_results_file, noise=0.1):
 
     for p in predictions[split]:
       idx = qa_id_arr_idx[p['qa_id']]
-      if split == 'train' and np.random.random() < noise:
-          np.random.shuffle(p['logp'])
       vqa_data[split][idx]['im_logp'] = p['logp']
       # for check purpose
 #       vqa_data[split][idx]['cquestion'] = p['question']
@@ -194,7 +192,7 @@ def append_kb_vqa_results(vqa_data, kb_vqa_results_file):
     for pred in predictions[split]:
       qa_id = pred['qa_id']
       idx = qa_id_arr_idx[qa_id]
-      vqa_data[split][idx]['kb_logp'] = pred['kb_logp_max']
+      vqa_data[split][idx]['kb_logp'] = pred['kb_logp_mean']
       assert(vqa_data[split][idx]['qa_id'] == qa_id)
       # for check purpose
 #       vqa_data[split][idx]['cquestion'] = p['question']

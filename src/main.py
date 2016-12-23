@@ -97,7 +97,7 @@ def main(config):
     if not os.path.exists(cache_file):
       print("Loading and Processing Data from raw...")
       vqa_data = read_data.read_visual7w_dataset(config.data_file, '')
-      vqa_data = read_data.append_image_vqa_results(vqa_data, config.im_vqa_file, config.im_vqa_noise)
+      vqa_data = read_data.append_image_vqa_results(vqa_data, config.im_vqa_file)
       vqa_data = read_data.append_image_embeddings(vqa_data, config.im_embed_file)
       vqa_data, vocab, maxqlen, maxalen = read_data.preprocess_raw_vqa_data(vqa_data, config.word_cnt_thresh, verbose=config.verbose)
 
@@ -114,10 +114,21 @@ def main(config):
         vqa_data = read_data.append_kb_vqa_results(vqa_data, config.kb_vqa_file)
     else:
         # assume the KB scores are available
+        # for split in ['train', 'val', 'test']:
+        #   for i in xrange(len(vqa_data[split])):
+        #     vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.45)   #[0.1, 0.55)
+        #   #   vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
+        # make correct KB scores for the samples where the im scores are incorrect and vice versa
         for split in ['train', 'val', 'test']:
           for i in xrange(len(vqa_data[split])):
-            vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.45)   #[0.1, 0.55)
-          #   vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
+            pred = np.argmin(vqa_data[split][i]['im_logp'])
+            if pred != 0:
+              vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1)   #[0.1, 0.55)
+              vqa_data[split][i]['kb_logp'][0] = -np.log(0.95)
+            else:
+            #   vqa_data[split][i]['kb_logp'] = -np.log(np.random.random_sample(4) * 0.1 + 0.89)   #[0.1, 0.55)
+            #   vqa_data[split][i]['kb_logp'][0] = -np.log(0.05)
+                vqa_data[split][i]['kb_logp'] = np.random.random(4)
 
     print("Data loaded")
     # define the graph
@@ -154,15 +165,15 @@ def main(config):
     print(image_embed.get_shape())
     print(ques_embed.get_shape())
     print(ans_embed.get_shape())
-    p = probability_networks.simple_mlp(
-        config.nhidden, config.nlayers, 4,
+    pnet = probability_networks.simple_mlp(
+        config.nhidden, config.nlayers, 1,
         image_embed, ques_embed, *tf.unpack(ans_embed, axis=1)
     )
-    print(p.get_shape())
+    print(pnet.get_shape())
 
     # combine image- and kb-vqa results
     # logits = tf.mul(p, im_vqa_logp) + tf.mul(1 - p, kb_vqa_logp)
-    logits = p * tf.exp(-im_vqa_logp) + (1 - p) * tf.exp(-kb_vqa_logp)
+    logits = tf.log(pnet * tf.exp(-im_vqa_logp) + (1 - pnet) * tf.exp(-kb_vqa_logp))
 
     # loss
     cross_entropy = tf.reduce_mean(
@@ -212,10 +223,16 @@ def main(config):
 
     print("Starting Training")
 
+    im_noise = config.im_vqa_noise
     for epoch in xrange(config.epochs):
         for data in read_data.vqa_data_iterator(
             vqa_data, 'train', config.batchsize, maxqlen, maxalen, do_permutation=True
         ):
+            if im_noise > 0.0001:
+                for i in range(data['im_logp'].shape[0]):
+                    if np.random.random() < im_noise:
+                        data['im_logp'][i,:] = np.ones(4)
+                        data['im_logp'][i,data['label'][i, :]==0] = 0.
             imbed = data['image_embed']
             ques = data['question']
             qmask = data['question_mask']
@@ -239,14 +256,17 @@ def main(config):
                 [train_op, cross_entropy, incr_step, p],
                 feed_dict=feed_dict
             )
-            # print("probs:")
-            # print(prs)
+            print("probs:")
+            print(prs[:10])
+            print("Sum p<0.5: ", np.sum(prs < 0.5))
+            im_noise -= (config.im_vqa_noise - 0.00001) / 500
+            print("new noise:", im_noise)
             # print("imqa:")
             # print(im_logp)
             # print("kbqa:")
             # print(kb_logp)
-            # print("labels:")
-            # print(label)
+            print("labels:")
+            print(label[:10])
 
             print("Step %d, Loss: %.3f" % (step, batch_loss))
             if step % config.val_freq == 0:
@@ -260,8 +280,11 @@ def main(config):
                 acc_kb = 0
                 acc_im = 0
                 cnt = 0
+                common = 0
+                kb_not_in_im = 0
+                kb_and_im = 0
                 for val_data in read_data.vqa_data_iterator(
-                    vqa_data, 'val', config.batchsize, maxqlen, maxalen, do_permutation=False
+                    vqa_data, 'val', config.batchsize, maxqlen, maxalen, do_permutation=True
                 ):
                   imbed = val_data['image_embed']
                   ques = val_data['question']
@@ -290,11 +313,22 @@ def main(config):
                   accuracy_im, correct_im = eval_accuracy(-im_logp, label)
                   acc_im += accuracy_im
                   cnt += label.shape[0]
+                  common += np.sum(np.equal(correct_im, correct_kb))
+                  kb_not_in_im += np.sum(np.logical_and(
+                    correct_kb, np.logical_not(correct_im)
+                    )
+                  )
+                  kb_and_im += np.sum(np.logical_and(
+                    correct_kb, correct_im
+                    )
+                  )
 
                 print("Acccucy of validation: %f" % (acc / cnt))
                 print("KB only Accuracy of validation: %f" % (acc_kb / cnt))
                 print("IM only Accuracy of validation: %f" % (acc_im / cnt))
-                print("Overlap of correct answers KB & IM ", np.sum(np.equal(correct_im, correct_kb)))
+                print("Overlap of answers KB & IM ", common)
+                print("Correct answers of KB which is correct for IM ", kb_and_im)
+                print("Correct answers of KB which is incorrect for IM ", kb_not_in_im)
 
 
 if __name__ == "__main__":
@@ -328,7 +362,7 @@ if __name__ == "__main__":
                    help='number of train epochs')
     p.add_argument('--val_freq', default=20, type=int,
                    help='validation frequency')
-    p.add_argument('--grad_clip', default=10.0, type=float,
+    p.add_argument('--grad_clip', default=50.0, type=float,
                    help='clip l2 norm of gradients at this value')
     p.add_argument('--nhidden', default=100, type=int,
                    help='number of final hidden units, only for some models')
