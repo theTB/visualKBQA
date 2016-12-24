@@ -17,8 +17,8 @@ import multiprocessing
 
 import nltk
 
-MODEL_PATH = "../Bilinear_cetrainSize300frac1.0dSize200relSize150acti0.001.1e-05.800.RAND.tanh.txt19.pickle"
-# MODEL_PATH = "/Users/tbansil/Downloads/ckbc-demo/Bilinear_cetrainSize300frac1.0dSize200relSize150acti0.001.1e-05.800.RAND.tanh.txt19.pickle"
+# MODEL_PATH = "../Bilinear_cetrainSize300frac1.0dSize200relSize150acti0.001.1e-05.800.RAND.tanh.txt19.pickle"
+MODEL_PATH = "/Users/tbansil/Downloads/ckbc-demo/Bilinear_cetrainSize300frac1.0dSize200relSize150acti0.001.1e-05.800.RAND.tanh.txt19.pickle"
 with open(MODEL_PATH, 'r') as f:
     model = pickle.load(f)
 
@@ -219,8 +219,8 @@ if __name__ == "__main__":
     #     del rel[del_rel.lower()]
 
     with open(config.vqa, 'r') as f:
-        vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
-        # vqa_data = cPickle.load(f)
+        # vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
+        vqa_data = cPickle.load(f)
     if config.save_small:
         if not os.path.exists(config.vqa+".small.pkl"):
             small = {}

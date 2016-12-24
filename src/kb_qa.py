@@ -179,8 +179,8 @@ if __name__ == "__main__":
         del rel[del_rel.lower()]
 
     with open(config.vqa, 'r') as f:
-        vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
-        # vqa_data = cPickle.load(f)
+        # vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
+        vqa_data = cPickle.load(f)
     if config.save_small:
         if not os.path.exists(config.vqa+".small.pkl"):
             small = {}

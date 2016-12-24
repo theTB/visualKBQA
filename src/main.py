@@ -108,6 +108,7 @@ def main(config):
       print("Loading Data from cache...")
       with open(cache_file, 'r') as f:
         vqa_data, vocab, maxqlen, maxalen = cPickle.load(f)
+        maxqlen = maxalen = 30
 
     if config.kb_vqa_file:
         print("Adding KB results from file")
@@ -193,10 +194,10 @@ def main(config):
     #     tf.nn.softmax_cross_entropy_with_logits(logits, label_placeholder)
     # )
     cross_entropy = tf.reduce_mean(
-        tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits, label_placeholder),
-            1
-        )
+        # tf.reduce_sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(logits, label_placeholder)
+            # 1
+        # )
     )
 
     # optimizer
@@ -304,10 +305,10 @@ def main(config):
             print("Step %d, Loss: %.3f" % (step, batch_loss))
             if step % config.val_freq == 0:
                 # save model
-                saver.save(
-                    session,
-                    config.log_dir + "/model-epoch%d-step%d" % (epoch, step)
-                )
+                # saver.save(
+                #     session,
+                #     config.log_dir + "/model-epoch%d-step%d" % (epoch, step)
+                # )
                 # Do some validation
                 acc = 0
                 acc_kb = 0
@@ -363,12 +364,13 @@ def main(config):
                 print("Correct answers of KB which is correct for IM ", kb_and_im)
                 print("Correct answers of KB which is incorrect for IM ", kb_not_in_im)
                 print("Current best val accuracy: ", best_val_score)
-                if acc > best_val_score:
-                    best_val_score = acc
+                if acc / cnt > best_val_score:
+                    best_val_score = acc /cnt
                     saver.save(
                         session,
                         config.log_dir + "/model-best"
                     )
+                break
         # Do test
         saver.restore(session, config.log_dir + "/model-best")
         acc = 0

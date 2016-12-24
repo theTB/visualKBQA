@@ -33,8 +33,8 @@ def simple_mlp(nhidden, nlayers, noutputs=1, *vectors):
         if layer < nlayers - 1:
             layer_inputs = tf.nn.relu(affine)
         else:
-            output = tf.nn.sigmoid(affine)
-            # output = tf.nn.relu(affine)
+            # output = tf.nn.sigmoid(affine)
+            output = tf.nn.relu(affine)
         if layer < nlayers - 2:
             hidden = int(hidden / 2)
         else:
