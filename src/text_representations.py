@@ -67,7 +67,7 @@ def bidir_lstm_model(
                 nhidden, use_peepholes=peepholes, state_is_tuple=True
             )
             lstm_outputs, _ = tf.nn.bidirectional_dynamic_rnn(
-                cell_fw=fwd_cell, cell_bw=bwd_cell, inputs=embeddings,
+                cell_fw=fwd_cell, cell_bw=bwd_cell, inputs=inputs,
                 sequence_length=tf.cast(tf.reduce_sum(mask, 1), tf.int32),
                 dtype=tf.float32
             )
